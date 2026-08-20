@@ -41,6 +41,35 @@
     }
     .eyebrow a { color: inherit; }
 
+    .hero {
+      display: flex;
+      align-items: flex-end;
+      gap: 2rem;
+      flex-wrap: wrap;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 1.75rem;
+    }
+    .hero-reading { display: flex; align-items: center; gap: 0.75rem; }
+    .hero-icon { font-size: 2.75rem; line-height: 1; }
+    .hero-temp { font-size: 3.75rem; font-weight: 500; line-height: 1; }
+    .hero-temp .deg { font-size: 2rem; color: var(--ink-soft); }
+    .hero-stats {
+      display: flex;
+      gap: 1.75rem;
+      flex-wrap: wrap;
+      padding-bottom: 0.4rem;
+    }
+    .hero-stat .label {
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      margin-bottom: 0.15rem;
+    }
+    .hero-stat .value { font-size: 1rem; font-weight: 500; }
+    #heroUpdated { color: var(--ink-soft); font-size: 0.8rem; margin-top: -1.25rem; margin-bottom: 1.75rem; }
+
     .week {
       display: flex;
       gap: 0;
@@ -102,6 +131,15 @@
       <a href="/history">History &rarr;</a>
     </p>
 
+    <section class="hero">
+      <div class="hero-reading">
+        <span class="hero-icon" id="heroIcon">–</span>
+        <span class="hero-temp mono" id="heroTemp">–<span class="deg">°C</span></span>
+      </div>
+      <div class="hero-stats" id="heroStats"></div>
+    </section>
+    <p id="heroUpdated">Loading…</p>
+
     <div class="week" id="week"></div>
 
     <section class="panel">
@@ -124,6 +162,26 @@
 
     const HORIZON_DAYS = 8;
     const RAIN_ICON_THRESHOLD_MM = 0.2;
+    const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+      "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+
+    function compassDirection(degrees) {
+      return COMPASS[Math.round(degrees / 22.5) % 16];
+    }
+
+    function weatherIcon(code, isDay) {
+      if (code === 0) return isDay ? "☀️" : "🌙";
+      if (code <= 2) return isDay ? "🌤️" : "☁️";
+      if (code === 3) return "☁️";
+      if (code === 45 || code === 48) return "🌫️";
+      if (code >= 51 && code <= 57) return "🌦️";
+      if (code >= 61 && code <= 67) return "🌧️";
+      if (code >= 71 && code <= 77) return "❄️";
+      if (code === 80 || code === 81 || code === 82) return "🌧️";
+      if (code === 85 || code === 86) return "🌨️";
+      if (code >= 95) return "⛈️";
+      return "🌡️";
+    }
 
     function dayKey(isoTime) { return isoTime.slice(0, 10); }
 
@@ -146,8 +204,38 @@
       }).join(" ");
     }
 
+    const heroIconEl = document.getElementById("heroIcon");
+    const heroTempEl = document.getElementById("heroTemp");
+    const heroStatsEl = document.getElementById("heroStats");
+    const heroUpdatedEl = document.getElementById("heroUpdated");
     const weekEl = document.getElementById("week");
     const chartDayLabelEl = document.getElementById("chartDayLabel");
+
+    async function loadCurrent() {
+      const response = await fetch("/api/current");
+      if (!response.ok) {
+        heroUpdatedEl.textContent = "No current reading yet";
+        return;
+      }
+      const data = await response.json();
+      const v = data.values;
+
+      heroUpdatedEl.textContent = "As of " + new Date(data.timestamp).toLocaleString();
+      heroIconEl.textContent = weatherIcon(v.weather_code, v.is_day !== 0);
+      heroTempEl.innerHTML = (v.temperature_2m !== undefined ? v.temperature_2m.toFixed(1) : "–") + '<span class="deg">°C</span>';
+
+      const stats = [];
+      if (v.apparent_temperature !== undefined) stats.push(["Feels like", v.apparent_temperature.toFixed(1) + "°C"]);
+      if (v.wind_speed_10m !== undefined) {
+        const dir = v.wind_direction_10m !== undefined ? " " + compassDirection(v.wind_direction_10m) : "";
+        stats.push(["Wind", v.wind_speed_10m.toFixed(1) + " km/h" + dir]);
+      }
+      if (v.relative_humidity_2m !== undefined) stats.push(["Humidity", v.relative_humidity_2m.toFixed(0) + "%"]);
+      if (v.surface_pressure !== undefined) stats.push(["Pressure", v.surface_pressure.toFixed(0) + " hPa"]);
+      heroStatsEl.innerHTML = stats.map(([label, value]) =>
+        '<div class="hero-stat"><div class="label">' + label + '</div><div class="value">' + value + "</div></div>"
+      ).join("");
+    }
 
     let tempSeries = [];    // [{time, min, median, max}]
     let precipSeries = [];  // [{time, min, median, max}]
@@ -350,7 +438,8 @@
     }
 
     async function init() {
-      const [temp, precip, wind] = await Promise.all([
+      const [, temp, precip, wind] = await Promise.all([
+        loadCurrent(),
         loadSeries("temperature_2m"),
         loadSeries("precipitation"),
         loadSeries("wind_speed_10m"),

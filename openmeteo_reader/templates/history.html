@@ -242,8 +242,9 @@
     const chartDayLabelEl = document.getElementById("chartDayLabel");
 
     let seriesByMetric = {};
-    let availableDayKeys = []; // most recent first
-    let selectedDayIndex = 0;
+    let availableDayKeys = []; // ascending: oldest first
+    let weekKeys = [];         // ascending slice of availableDayKeys: oldest...today
+    let selectedDayIndex = 0;  // index into weekKeys
     let selectedOverlay = OVERLAYS[0].key;
     let chart = null;
 
@@ -284,8 +285,11 @@
       for (const points of Object.values(seriesByMetric)) {
         for (const p of points) allKeys.add(dayKey(p.time));
       }
-      availableDayKeys = Array.from(allKeys).sort().reverse();
-      selectedDayIndex = 0;
+      // Ascending (oldest first) - left-to-right should read as forward through
+      // time, same convention as the forecast page, with today on the right.
+      availableDayKeys = Array.from(allKeys).sort();
+      weekKeys = availableDayKeys.slice(-WEEK_LENGTH);
+      selectedDayIndex = weekKeys.length - 1; // today
     }
 
     function pointsForDay(metricKey, dayKeyValue) {
@@ -293,8 +297,7 @@
     }
 
     function renderWeek() {
-      const todayKey = availableDayKeys[0];
-      const weekKeys = availableDayKeys.slice(0, WEEK_LENGTH);
+      const todayKey = weekKeys[weekKeys.length - 1];
 
       weekEl.innerHTML = "";
       weekKeys.forEach((key, index) => {
@@ -341,7 +344,7 @@
     }
 
     function renderChart() {
-      const dayKeyValue = availableDayKeys[selectedDayIndex];
+      const dayKeyValue = weekKeys[selectedDayIndex];
       chartDayLabelEl.textContent = dayKeyValue ? formatDayLabel(dayKeyValue) : "–";
 
       const overlay = OVERLAYS.find((o) => o.key === selectedOverlay);
