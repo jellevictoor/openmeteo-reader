@@ -1,0 +1,26 @@
+# Build stage
+FROM python:3.13-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY openmeteo_reader ./openmeteo_reader
+RUN uv sync --frozen --no-dev
+
+# Runtime stage
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY --from=builder /app/.venv /app/.venv
+COPY openmeteo_reader ./openmeteo_reader
+
+EXPOSE 8000
+
+# Goes through the CLI's "serve" command, not uvicorn directly - that's what wires
+# the InfluxDB-backed repository into the FastAPI app before it starts serving.
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "openmeteo_reader", "serve"]

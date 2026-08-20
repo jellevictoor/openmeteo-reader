@@ -1,0 +1,44 @@
+services:
+  api:
+    image: ghcr.io/jellevictoor/openmeteo-reader-api:latest
+    container_name: openmeteo-reader-api
+    environment:
+      - INFLUX_URL=${INFLUX_URL}
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=${INFLUX_ORG}
+      - INFLUX_BUCKET=${INFLUX_BUCKET:-weather}
+    restart: unless-stopped
+    networks:
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.openmeteo-reader.rule: "Host(`weather.victoor.io`)"
+      # TODO: confirm these three against your actual Traefik setup on .5 - entrypoint
+      # name and cert resolver name are whatever your other Traefik-routed services use.
+      traefik.http.routers.openmeteo-reader.entrypoints: "websecure"
+      traefik.http.routers.openmeteo-reader.tls.certresolver: "letsencrypt"
+      traefik.http.services.openmeteo-reader.loadbalancer.server.port: "8000"
+
+  scheduler:
+    image: mcuadros/ofelia:latest
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-run.openmeteo-import.schedule: "0 * * * *"
+      ofelia.job-run.openmeteo-import.image: "ghcr.io/jellevictoor/openmeteo-reader:latest"
+      ofelia.job-run.openmeteo-import.command: >-
+        main
+        --influx-url ${INFLUX_URL}
+        --influx-token ${INFLUX_TOKEN}
+        --influx-org ${INFLUX_ORG}
+        --influx-bucket ${INFLUX_BUCKET:-weather}
+
+networks:
+  traefik:
+    # TODO: this must be the actual external network name your Traefik container
+    # joins on .5, so the api service is reachable by Traefik's docker provider.
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
