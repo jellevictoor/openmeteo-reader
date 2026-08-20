@@ -28,7 +28,10 @@ services:
     restart: unless-stopped
     labels:
       ofelia.enabled: "true"
-      ofelia.job-run.openmeteo-import.schedule: "0 * * * *"
+      # ofelia's cron has a leading seconds field: "sec min hour day month weekday".
+      # This runs at minute 0 of every hour - a plain 5-field "0 * * * *" gets
+      # misread as seconds=0,minutes=* and fires every minute instead.
+      ofelia.job-run.openmeteo-import.schedule: "0 0 * * * *"
       ofelia.job-run.openmeteo-import.image: "ghcr.io/jellevictoor/openmeteo-reader:latest"
       ofelia.job-run.openmeteo-import.network: "jelle_default"
       ofelia.job-run.openmeteo-import.command: >-
