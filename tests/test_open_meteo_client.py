@@ -46,6 +46,8 @@ def test_fetch_recent_requests_the_forecast_api_with_no_future_hours(client):
     assert params["past_hours"] == "6"
     assert params["forecast_hours"] == "0"
     assert params["timezone"] == "UTC"
+    assert params["tilt"] == "39"
+    assert params["azimuth"] == "-26"
     assert "temperature_2m" in params["hourly"]
 
     assert [r.values for r in readings] == [{"temperature_2m": 5.2}]
@@ -73,6 +75,8 @@ def test_fetch_historical_requests_the_archive_api_for_the_given_date_range(clie
     assert params["start_date"] == "2019-01-01"
     assert params["end_date"] == "2019-01-31"
     assert params["timezone"] == "UTC"
+    assert params["tilt"] == "39"
+    assert params["azimuth"] == "-26"
     assert "temperature_2m" in params["hourly"]
 
     assert [r.values for r in readings] == [{"temperature_2m": 3.1}]

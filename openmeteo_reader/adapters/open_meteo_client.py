@@ -113,6 +113,15 @@ HISTORICAL_HOURLY_VARIABLES = [
 # rather than let one transient response kill an entire multi-year backfill.
 RETRY_BACKOFF_SECONDS = [5, 15, 45]
 
+# The home's actual PV array, from Home Assistant's forecast_solar integration
+# (.storage/core.config_entries, subentry "39° / 154° / 5200W"). HA stores azimuth
+# in compass convention (0=north, 90=east, 180=south); Open-Meteo's global_tilted_
+# irradiance uses the solar-industry convention (0=south, -90=east, 90=west), so
+# the stored 154 becomes 154-180=-26 here. Without this, global_tilted_irradiance
+# is computed for Open-Meteo's default orientation, not this roof.
+PANEL_TILT_DEGREES = 39
+PANEL_AZIMUTH_DEGREES = -26
+
 
 class OpenMeteoClient(WeatherSource):
     """Fetches weather data for one fixed location from Open-Meteo"""
@@ -151,6 +160,8 @@ class OpenMeteoClient(WeatherSource):
                 "past_hours": past_hours,
                 "forecast_hours": 0,
                 "timezone": "UTC",
+                "tilt": PANEL_TILT_DEGREES,
+                "azimuth": PANEL_AZIMUTH_DEGREES,
             },
         )
         return parse_hourly_readings(response.json(), location=self._location)
@@ -165,6 +176,8 @@ class OpenMeteoClient(WeatherSource):
                 "start_date": start.isoformat(),
                 "end_date": end.isoformat(),
                 "timezone": "UTC",
+                "tilt": PANEL_TILT_DEGREES,
+                "azimuth": PANEL_AZIMUTH_DEGREES,
             },
         )
         return parse_hourly_readings(response.json(), location=self._location)
