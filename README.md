@@ -78,18 +78,20 @@ Copy `.env.example` to `.env` and fill in your InfluxDB token/org before deployi
 ## Deployment (Core node, `.5`)
 
 ```bash
-cp .env.example .env   # fill in INFLUX_TOKEN, INFLUX_ORG, TRAEFIK_NETWORK
+cp .env.example .env   # fill in INFLUX_TOKEN, INFLUX_ORG
 docker compose up -d
 ```
 
 This starts the website (routed via Traefik at `weather.victoor.io`, DNS already
-points there) and an `ofelia` scheduler that runs the importer every hour.
+points there) and an `ofelia` scheduler that runs the importer every hour. Both join
+the `jelle_default` docker network - same one InfluxDB and Traefik are on - so
+`INFLUX_URL` defaults to the internal `http://influxdb:8086` and the Traefik labels
+match the other `*.victoor.io` services (`entrypoints=websecure`,
+`tls.certresolver=cloudflare`).
 
-**Before this actually routes**, confirm in `docker-compose.yml`:
-- the `networks.traefik.name` matches the real external network your Traefik
-  container joins on `.5`
-- the `entrypoints` / `tls.certresolver` labels match what your other
-  Traefik-routed services use
+The `openmeteo-reader-api`/`-scheduler` images need to be pullable from GHCR without
+auth on `.5` - either make the GHCR packages public, or `docker login ghcr.io` there
+with a PAT that has `read:packages`.
 
 To backfill history once, run the importer image directly:
 
