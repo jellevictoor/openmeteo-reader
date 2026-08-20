@@ -1,6 +1,7 @@
 """
 Adapter - Fetches weather data from the Open-Meteo Forecast and Historical APIs
 """
+import time
 from datetime import date
 
 import httpx
@@ -107,6 +108,12 @@ HISTORICAL_HOURLY_VARIABLES = [
 ]
 
 
+# Open-Meteo's rate limit is occasionally hit even under normal, non-bulk use (seen
+# in production on the very first backfill request) - retry a 429 with backoff
+# rather than let one transient response kill an entire multi-year backfill.
+RETRY_BACKOFF_SECONDS = [5, 15, 45]
+
+
 class OpenMeteoClient(WeatherSource):
     """Fetches weather data for one fixed location from Open-Meteo"""
 
@@ -116,14 +123,26 @@ class OpenMeteoClient(WeatherSource):
         longitude: float,
         location: str = "home",
         http_client: httpx.Client | None = None,
+        sleep=time.sleep,
     ):
         self._latitude = latitude
         self._longitude = longitude
         self._location = location
         self._http = http_client or httpx.Client(timeout=30.0)
+        self._sleep = sleep
+
+    def _get(self, url: str, params: dict) -> httpx.Response:
+        response = self._http.get(url, params=params)
+        for delay in RETRY_BACKOFF_SECONDS:
+            if response.status_code != 429:
+                break
+            self._sleep(delay)
+            response = self._http.get(url, params=params)
+        response.raise_for_status()
+        return response
 
     def fetch_recent(self, past_hours: int) -> list[WeatherReading]:
-        response = self._http.get(
+        response = self._get(
             FORECAST_URL,
             params={
                 "latitude": self._latitude,
@@ -134,11 +153,10 @@ class OpenMeteoClient(WeatherSource):
                 "timezone": "UTC",
             },
         )
-        response.raise_for_status()
         return parse_hourly_readings(response.json(), location=self._location)
 
     def fetch_historical(self, start: date, end: date) -> list[WeatherReading]:
-        response = self._http.get(
+        response = self._get(
             HISTORICAL_URL,
             params={
                 "latitude": self._latitude,
@@ -149,5 +167,4 @@ class OpenMeteoClient(WeatherSource):
                 "timezone": "UTC",
             },
         )
-        response.raise_for_status()
         return parse_hourly_readings(response.json(), location=self._location)

@@ -12,8 +12,15 @@ from openmeteo_reader.adapters.open_meteo_client import (
 
 
 @pytest.fixture
-def client():
-    return OpenMeteoClient(latitude=50.995, longitude=3.213, location="home")
+def sleeps():
+    return []
+
+
+@pytest.fixture
+def client(sleeps):
+    return OpenMeteoClient(
+        latitude=50.995, longitude=3.213, location="home", sleep=sleeps.append
+    )
 
 
 @respx.mock
@@ -77,3 +84,44 @@ def test_fetch_recent_raises_on_http_error(client):
 
     with pytest.raises(httpx.HTTPStatusError):
         client.fetch_recent(past_hours=6)
+
+
+@respx.mock
+def test_fetch_recent_retries_after_a_transient_429_then_succeeds(client, sleeps):
+    route = respx.get(FORECAST_URL)
+    route.side_effect = [
+        httpx.Response(429),
+        httpx.Response(
+            200,
+            json={"hourly": {"time": ["2024-01-01T00:00"], "temperature_2m": [5.2]}},
+        ),
+    ]
+
+    readings = client.fetch_recent(past_hours=6)
+
+    assert [r.values for r in readings] == [{"temperature_2m": 5.2}]
+    assert route.call_count == 2
+    assert sleeps == [5]
+
+
+@respx.mock
+def test_fetch_recent_raises_after_exhausting_retries_on_429(client, sleeps):
+    route = respx.get(FORECAST_URL)
+    route.side_effect = [httpx.Response(429)] * 4
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.fetch_recent(past_hours=6)
+
+    assert route.call_count == 4
+    assert sleeps == [5, 15, 45]
+
+
+@respx.mock
+def test_fetch_recent_does_not_retry_on_a_non_429_error(client, sleeps):
+    route = respx.get(FORECAST_URL).mock(return_value=httpx.Response(500))
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.fetch_recent(past_hours=6)
+
+    assert route.call_count == 1
+    assert sleeps == []
