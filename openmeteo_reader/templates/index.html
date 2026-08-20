@@ -105,6 +105,7 @@
     .day-tab .range .hi { font-weight: 600; }
     .day-tab .range .lo { color: var(--ink-soft); }
     .day-tab .wind { font-size: 0.7rem; color: var(--brass); margin-top: 0.2rem; }
+    .day-tab .precip { font-size: 0.7rem; color: var(--rain); margin-top: 0.2rem; }
     .day-tab .today-dot {
       width: 5px; height: 5px; border-radius: 50%;
       background: var(--brass); display: inline-block; margin-left: 0.3rem;
@@ -266,7 +267,9 @@
         const hi = medians.length ? Math.max(...medians) : null;
         const lo = medians.length ? Math.min(...medians) : null;
         const path = medians.length > 1 ? sparklinePath(medians, 92, 26, 4) : "";
-        const rainExpected = dayPrecip.some((p) => (p.median ?? 0) >= RAIN_ICON_THRESHOLD_MM);
+        const precipMedians = dayPrecip.map((p) => p.median).filter((v) => v !== null && v !== undefined);
+        const precipTotal = precipMedians.reduce((sum, v) => sum + v, 0);
+        const rainExpected = precipTotal >= RAIN_ICON_THRESHOLD_MM;
         const windMedians = dayWind.map((p) => p.median).filter((v) => v !== null && v !== undefined);
         const windMax = windMedians.length ? Math.max(...windMedians) : null;
 
@@ -284,6 +287,7 @@
           (hi !== null ? '<span class="hi">' + hi.toFixed(0) + "°</span> " : "") +
           (lo !== null ? '<span class="lo">' + lo.toFixed(0) + "°</span>" : "") +
           "</div>" +
+          '<div class="precip mono">' + precipTotal.toFixed(1) + " mm</div>" +
           (windMax !== null ? '<div class="wind mono">' + windMax.toFixed(0) + " km/h</div>" : "");
         button.addEventListener("click", () => {
           selectedDayIndex = index;
