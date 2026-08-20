@@ -19,10 +19,10 @@ ENSEMBLE_URL = "https://ensemble-api.open-meteo.com/v1/ensemble"
 # DWD's ICON: the standard reference model for European weather, a good fit for a
 # Belgian home station. 40 members, ~7.5 day horizon.
 ENSEMBLE_MODEL = "icon_seamless"
-# Only the two variables people actually act on day-to-day ("how warm", "will it
-# rain") - not the full curated actuals set, which would be 3.5x the members/writes
+# The variables people actually act on day-to-day ("how warm", "will it rain", "how
+# windy") - not the full curated actuals set, which would be far more members/writes
 # for spread bands most people won't look at.
-ENSEMBLE_VARIABLES = ["temperature_2m", "precipitation"]
+ENSEMBLE_VARIABLES = ["temperature_2m", "precipitation", "wind_speed_10m"]
 
 # The Forecast API's rolling window: this is what revises for up to ~3h after the
 # fact as observations land, so it's what feeds the hourly correction job.

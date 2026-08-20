@@ -75,6 +75,7 @@
     .day-tab .range { font-size: 0.78rem; }
     .day-tab .range .hi { font-weight: 600; }
     .day-tab .range .lo { color: var(--ink-soft); }
+    .day-tab .wind { font-size: 0.7rem; color: var(--brass); margin-top: 0.2rem; }
     .day-tab .today-dot {
       width: 5px; height: 5px; border-radius: 50%;
       background: var(--brass); display: inline-block; margin-left: 0.3rem;
@@ -112,7 +113,8 @@
       </div>
       <p class="caption">
         Shaded bands show the spread across DWD ICON's 40 ensemble members - the
-        range of what could plausibly happen, not a single fixed prediction.
+        range of what could plausibly happen, not a single fixed prediction. Wind
+        speed (dashed) has no band shown, to keep the chart readable.
       </p>
     </section>
   </div>
@@ -149,6 +151,7 @@
 
     let tempSeries = [];    // [{time, min, median, max}]
     let precipSeries = [];  // [{time, min, median, max}]
+    let windSeries = [];    // [{time, min, median, max}]
     let availableDayKeys = [];
     let selectedDayIndex = 0; // 0 = today
     let chart = null;
@@ -170,11 +173,14 @@
       availableDayKeys.forEach((key, index) => {
         const dayTemps = pointsForDay(tempSeries, key);
         const dayPrecip = pointsForDay(precipSeries, key);
+        const dayWind = pointsForDay(windSeries, key);
         const medians = dayTemps.map((p) => p.median).filter((v) => v !== null && v !== undefined);
         const hi = medians.length ? Math.max(...medians) : null;
         const lo = medians.length ? Math.min(...medians) : null;
         const path = medians.length > 1 ? sparklinePath(medians, 92, 26, 4) : "";
         const rainExpected = dayPrecip.some((p) => (p.median ?? 0) >= RAIN_ICON_THRESHOLD_MM);
+        const windMedians = dayWind.map((p) => p.median).filter((v) => v !== null && v !== undefined);
+        const windMax = windMedians.length ? Math.max(...windMedians) : null;
 
         const button = document.createElement("button");
         button.className = "day-tab" + (index === selectedDayIndex ? " active" : "");
@@ -189,7 +195,8 @@
           '<div class="range mono">' +
           (hi !== null ? '<span class="hi">' + hi.toFixed(0) + "°</span> " : "") +
           (lo !== null ? '<span class="lo">' + lo.toFixed(0) + "°</span>" : "") +
-          "</div>";
+          "</div>" +
+          (windMax !== null ? '<div class="wind mono">' + windMax.toFixed(0) + " km/h</div>" : "");
         button.addEventListener("click", () => {
           selectedDayIndex = index;
           renderWeek();
@@ -205,6 +212,7 @@
 
       const tempDay = pointsForDay(tempSeries, dayKeyValue);
       const precipDay = pointsForDay(precipSeries, dayKeyValue);
+      const windDay = pointsForDay(windSeries, dayKeyValue);
       const labels = tempDay.map((p) => new Date(p.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
 
       const datasets = [
@@ -282,6 +290,21 @@
           order: 2,
           datalabels: { display: false },
         },
+        {
+          // No band for wind - just the median, on its own hidden-axis scale so
+          // it doesn't compete visually with temperature's or precipitation's.
+          label: "Wind speed",
+          data: windDay.map((p) => p.median),
+          yAxisID: "y2",
+          borderColor: "#b8863b",
+          backgroundColor: "#b8863b",
+          borderDash: [4, 3],
+          pointRadius: 0,
+          fill: false,
+          tension: 0.3,
+          order: 7,
+          datalabels: { display: false },
+        },
       ];
 
       if (chart) chart.destroy();
@@ -307,6 +330,7 @@
               suggestedMax: 5,
               title: { display: true, text: "mm", color: "#35577a" },
             },
+            y2: { beginAtZero: true, display: false },
           },
           plugins: {
             legend: { display: false },
@@ -314,7 +338,8 @@
               filter: (item) => !item.dataset.label.includes("min") && !item.dataset.label.includes("range"),
               callbacks: {
                 label: (ctx) => {
-                  const unit = ctx.dataset.yAxisID === "y" ? "°C" : "mm";
+                  const units = { y: "°C", y1: "mm", y2: "km/h" };
+                  const unit = units[ctx.dataset.yAxisID] || "";
                   return ctx.dataset.label + ": " + ctx.parsed.y.toFixed(1) + " " + unit;
                 },
               },
@@ -325,14 +350,16 @@
     }
 
     async function init() {
-      const [temp, precip] = await Promise.all([
+      const [temp, precip, wind] = await Promise.all([
         loadSeries("temperature_2m"),
         loadSeries("precipitation"),
+        loadSeries("wind_speed_10m"),
       ]);
       tempSeries = temp;
       precipSeries = precip;
+      windSeries = wind;
 
-      const keys = new Set([...temp, ...precip].map((p) => dayKey(p.time)));
+      const keys = new Set([...temp, ...precip, ...wind].map((p) => dayKey(p.time)));
       availableDayKeys = Array.from(keys).sort();
 
       renderWeek();
