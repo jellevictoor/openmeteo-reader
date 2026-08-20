@@ -4,107 +4,190 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Home Weather</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <style>
+    :root {
+      --paper: #f5f3ee;
+      --card: #fffefb;
+      --ink: #1f2733;
+      --ink-soft: #6b7280;
+      --slate: #4a6274;
+      --slate-soft: rgba(74, 98, 116, 0.14);
+      --brass: #b8863b;
+      --brass-soft: rgba(184, 134, 59, 0.16);
+      --rain: #35577a;
+      --rain-soft: rgba(53, 87, 122, 0.22);
+      --rule: #ded8c8;
+      --highlight: #ece6d4;
+    }
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0f1115;
-      color: #e6e6e6;
+      font-family: "Archivo", sans-serif;
+      background: var(--paper);
+      color: var(--ink);
       margin: 0;
-      padding: 2rem;
+      padding: 2.5rem 2rem 4rem;
     }
-    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 1.5rem 0; }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    .mono { font-family: "IBM Plex Mono", monospace; }
+    .eyebrow {
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      margin: 0 0 0.4rem 0;
+    }
 
     .hero {
       display: flex;
-      align-items: center;
-      gap: 1.5rem;
-      background: #1a1d24;
-      border-radius: 0.75rem;
-      padding: 1.5rem 2rem;
-      margin-bottom: 1.5rem;
+      align-items: flex-end;
+      gap: 2rem;
       flex-wrap: wrap;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 1.75rem;
     }
-    .hero-icon { font-size: 3.5rem; line-height: 1; }
-    .hero-temp { font-size: 3rem; font-weight: 700; min-width: 6rem; }
-    .hero-meta {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 0.75rem 1.5rem;
-      flex: 1;
-      color: #c3c9d4;
-      font-size: 0.9rem;
+    .hero-reading { display: flex; align-items: center; gap: 0.75rem; }
+    .hero-icon { font-size: 2.75rem; line-height: 1; }
+    .hero-temp { font-size: 3.75rem; font-weight: 500; line-height: 1; }
+    .hero-temp .deg { font-size: 2rem; color: var(--ink-soft); }
+    .hero-stats {
+      display: flex;
+      gap: 1.75rem;
+      flex-wrap: wrap;
+      padding-bottom: 0.4rem;
     }
-    .hero-meta .label { color: #9098a8; font-size: 0.75rem; text-transform: uppercase; }
-    .hero-meta .value { font-size: 1.05rem; color: #e6e6e6; font-weight: 600; }
-    #heroUpdated { color: #9098a8; font-size: 0.8rem; margin-bottom: 1.5rem; }
+    .hero-stat .label {
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      margin-bottom: 0.15rem;
+    }
+    .hero-stat .value { font-size: 1rem; font-weight: 500; }
+    #heroUpdated { color: var(--ink-soft); font-size: 0.8rem; margin-top: 0.75rem; }
 
-    .chart-section { background: #1a1d24; border-radius: 0.75rem; padding: 1.25rem 1.5rem; }
-    .toolbar {
+    .week {
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+      border: 1px solid var(--rule);
+      border-radius: 0.6rem;
+      background: var(--card);
+      margin-bottom: 1.75rem;
+    }
+    .day-tab {
+      flex: 1 0 96px;
+      padding: 0.85rem 0.6rem;
+      text-align: center;
+      background: none;
+      border: none;
+      border-right: 1px solid var(--rule);
+      cursor: pointer;
+      color: var(--ink);
+      border-radius: 0;
+      font-family: inherit;
+    }
+    .day-tab:last-child { border-right: none; }
+    .day-tab:hover { background: var(--paper); }
+    .day-tab.active { background: var(--highlight); }
+    .day-tab .dow {
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .day-tab .date { font-size: 0.7rem; color: var(--ink-soft); margin-bottom: 0.35rem; }
+    .day-tab svg { display: block; margin: 0 auto 0.35rem; }
+    .day-tab .range { font-size: 0.78rem; }
+    .day-tab .range .hi { font-weight: 600; }
+    .day-tab .range .lo { color: var(--ink-soft); }
+    .day-tab .today-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--brass); display: inline-block; margin-left: 0.3rem;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--rule);
+      border-radius: 0.6rem;
+      padding: 1.25rem 1.5rem 1.5rem;
+    }
+    .panel-head {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: baseline;
       flex-wrap: wrap;
       gap: 0.75rem;
       margin-bottom: 1rem;
     }
-    .metric-toggle { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .day-nav { display: flex; align-items: center; gap: 0.75rem; }
-    .day-nav span { min-width: 9rem; text-align: center; font-size: 0.9rem; color: #c3c9d4; }
-    button {
-      background: #22262f;
-      color: #e6e6e6;
-      border: 1px solid #2a2e38;
-      border-radius: 0.375rem;
-      padding: 0.4rem 0.75rem;
-      font-size: 0.9rem;
+    .overlay-toggle { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .overlay-toggle button {
+      font-family: "Archivo", sans-serif;
+      font-size: 0.78rem;
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      padding: 0.3rem 0.7rem;
+      color: var(--ink-soft);
       cursor: pointer;
     }
-    button:hover:not(:disabled) { border-color: #3b82f6; }
-    button:disabled { opacity: 0.4; cursor: default; }
-    button.active { background: #3b82f6; border-color: #3b82f6; }
-    .chart-wrap { max-height: 380px; }
+    .overlay-toggle button.active {
+      background: var(--ink);
+      color: var(--card);
+      border-color: var(--ink);
+    }
+    .chart-wrap { max-height: 360px; }
+
+    :focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
   </style>
 </head>
 <body>
-  <h1>Home Weather</h1>
-  <div id="heroUpdated">Loading…</div>
+  <div class="wrap">
+    <p class="eyebrow">Home station &middot; 50.995&deg;N 3.213&deg;E</p>
 
-  <section class="hero" id="hero">
-    <div class="hero-icon" id="heroIcon">–</div>
-    <div class="hero-temp" id="heroTemp">–°</div>
-    <div class="hero-meta" id="heroMeta"></div>
-  </section>
-
-  <section class="chart-section">
-    <div class="toolbar">
-      <div class="metric-toggle" id="metricToggle"></div>
-      <div class="day-nav">
-        <button id="prevDay" aria-label="Previous day">‹</button>
-        <span id="dayLabel">–</span>
-        <button id="nextDay" aria-label="Next day">›</button>
+    <section class="hero">
+      <div class="hero-reading">
+        <span class="hero-icon" id="heroIcon">–</span>
+        <span class="hero-temp mono" id="heroTemp">–<span class="deg">°C</span></span>
       </div>
-    </div>
-    <div class="chart-wrap">
-      <canvas id="chart" height="110"></canvas>
-    </div>
-  </section>
+      <div class="hero-stats" id="heroStats"></div>
+    </section>
+    <p id="heroUpdated" style="margin-top:-1.25rem;">Loading…</p>
+
+    <div class="week" id="week"></div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <p class="eyebrow" id="chartDayLabel" style="margin:0;">–</p>
+        <div class="overlay-toggle" id="overlayToggle"></div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chart" height="120"></canvas>
+      </div>
+    </section>
+  </div>
 
   <script>
     Chart.register(ChartDataLabels);
 
-    const METRICS = [
-      { key: "temperature_2m", label: "Temperature", unit: "°C", decimals: 1 },
-      { key: "precipitation", label: "Precipitation", unit: "mm", decimals: 1 },
-      { key: "wind_speed_10m", label: "Wind speed", unit: "km/h", decimals: 1 },
-      { key: "relative_humidity_2m", label: "Humidity", unit: "%", decimals: 0 },
-      { key: "shortwave_radiation", label: "Solar radiation", unit: "W/m²", decimals: 0 },
-      { key: "cloud_cover", label: "Cloud cover", unit: "%", decimals: 0 },
-      { key: "surface_pressure", label: "Pressure", unit: "hPa", decimals: 0 },
+    const TEMP = { key: "temperature_2m", label: "Temperature", unit: "°C", decimals: 1 };
+    const OVERLAYS = [
+      { key: "precipitation", label: "Precipitation", unit: "mm", decimals: 1, kind: "bar", color: "#35577a" },
+      { key: "wind_speed_10m", label: "Wind", unit: "km/h", decimals: 1, kind: "line", color: "#b8863b" },
+      { key: "relative_humidity_2m", label: "Humidity", unit: "%", decimals: 0, kind: "area", color: "#4a6274" },
+      { key: "shortwave_radiation", label: "Solar radiation", unit: "W/m²", decimals: 0, kind: "area", color: "#b8863b" },
+      { key: "cloud_cover", label: "Cloud cover", unit: "%", decimals: 0, kind: "area", color: "#6b7280" },
+      { key: "surface_pressure", label: "Pressure", unit: "hPa", decimals: 0, kind: "line", color: "#6b7280" },
     ];
+    const ALL_METRICS = [TEMP, ...OVERLAYS];
     const DAYS_OF_HISTORY = 30;
+    const WEEK_LENGTH = 7;
     const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
       "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
 
@@ -126,9 +209,7 @@
       return "🌡️";
     }
 
-    function dayKey(isoTime) {
-      return isoTime.slice(0, 10);
-    }
+    function dayKey(isoTime) { return isoTime.slice(0, 10); }
 
     function formatDayLabel(key) {
       const d = new Date(key + "T00:00:00Z");
@@ -137,19 +218,30 @@
       });
     }
 
+    function sparklinePath(values, width, height, pad) {
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const span = max - min || 1;
+      const stepX = (width - pad * 2) / (values.length - 1 || 1);
+      return values.map((v, i) => {
+        const x = pad + i * stepX;
+        const y = pad + (1 - (v - min) / span) * (height - pad * 2);
+        return (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1);
+      }).join(" ");
+    }
+
     const heroIconEl = document.getElementById("heroIcon");
     const heroTempEl = document.getElementById("heroTemp");
-    const heroMetaEl = document.getElementById("heroMeta");
+    const heroStatsEl = document.getElementById("heroStats");
     const heroUpdatedEl = document.getElementById("heroUpdated");
-    const metricToggleEl = document.getElementById("metricToggle");
-    const dayLabelEl = document.getElementById("dayLabel");
-    const prevDayBtn = document.getElementById("prevDay");
-    const nextDayBtn = document.getElementById("nextDay");
+    const weekEl = document.getElementById("week");
+    const overlayToggleEl = document.getElementById("overlayToggle");
+    const chartDayLabelEl = document.getElementById("chartDayLabel");
 
     let seriesByMetric = {};
-    let availableDayKeys = [];
-    let selectedMetric = METRICS[0].key;
-    let selectedDayIndex = 0; // index into availableDayKeys, 0 = most recent
+    let availableDayKeys = []; // most recent first
+    let selectedDayIndex = 0;
+    let selectedOverlay = OVERLAYS[0].key;
     let chart = null;
 
     async function loadCurrent() {
@@ -161,31 +253,25 @@
       const data = await response.json();
       const v = data.values;
 
-      heroUpdatedEl.textContent = "Last updated " + new Date(data.timestamp).toLocaleString();
+      heroUpdatedEl.textContent = "As of " + new Date(data.timestamp).toLocaleString();
       heroIconEl.textContent = weatherIcon(v.weather_code, v.is_day !== 0);
-      heroTempEl.textContent = (v.temperature_2m !== undefined ? v.temperature_2m.toFixed(1) : "–") + "°C";
+      heroTempEl.innerHTML = (v.temperature_2m !== undefined ? v.temperature_2m.toFixed(1) : "–") + '<span class="deg">°C</span>';
 
-      const meta = [];
-      if (v.apparent_temperature !== undefined) {
-        meta.push(["Feels like", v.apparent_temperature.toFixed(1) + "°C"]);
-      }
+      const stats = [];
+      if (v.apparent_temperature !== undefined) stats.push(["Feels like", v.apparent_temperature.toFixed(1) + "°C"]);
       if (v.wind_speed_10m !== undefined) {
         const dir = v.wind_direction_10m !== undefined ? " " + compassDirection(v.wind_direction_10m) : "";
-        meta.push(["Wind", v.wind_speed_10m.toFixed(1) + " km/h" + dir]);
+        stats.push(["Wind", v.wind_speed_10m.toFixed(1) + " km/h" + dir]);
       }
-      if (v.relative_humidity_2m !== undefined) {
-        meta.push(["Humidity", v.relative_humidity_2m.toFixed(0) + "%"]);
-      }
-      if (v.surface_pressure !== undefined) {
-        meta.push(["Pressure", v.surface_pressure.toFixed(0) + " hPa"]);
-      }
-      heroMetaEl.innerHTML = meta.map(([label, value]) =>
-        '<div><div class="label">' + label + '</div><div class="value">' + value + '</div></div>'
+      if (v.relative_humidity_2m !== undefined) stats.push(["Humidity", v.relative_humidity_2m.toFixed(0) + "%"]);
+      if (v.surface_pressure !== undefined) stats.push(["Pressure", v.surface_pressure.toFixed(0) + " hPa"]);
+      heroStatsEl.innerHTML = stats.map(([label, value]) =>
+        '<div class="hero-stat"><div class="label">' + label + '</div><div class="value">' + value + "</div></div>"
       ).join("");
     }
 
     async function loadAllSeries() {
-      const results = await Promise.all(METRICS.map(async (m) => {
+      const results = await Promise.all(ALL_METRICS.map(async (m) => {
         const response = await fetch("/api/series?variable=" + m.key + "&hours=" + (DAYS_OF_HISTORY * 24));
         return [m.key, await response.json()];
       }));
@@ -195,83 +281,144 @@
       for (const points of Object.values(seriesByMetric)) {
         for (const p of points) allKeys.add(dayKey(p.time));
       }
-      availableDayKeys = Array.from(allKeys).sort().reverse(); // most recent first
+      availableDayKeys = Array.from(allKeys).sort().reverse();
       selectedDayIndex = 0;
     }
 
-    function renderMetricToggle() {
-      metricToggleEl.innerHTML = "";
-      for (const m of METRICS) {
+    function pointsForDay(metricKey, dayKeyValue) {
+      return (seriesByMetric[metricKey] || []).filter((p) => dayKey(p.time) === dayKeyValue);
+    }
+
+    function renderWeek() {
+      const todayKey = availableDayKeys[0];
+      const weekKeys = availableDayKeys.slice(0, WEEK_LENGTH);
+
+      weekEl.innerHTML = "";
+      weekKeys.forEach((key, index) => {
+        const temps = pointsForDay(TEMP.key, key).map((p) => p.value);
+        const hi = temps.length ? Math.max(...temps) : null;
+        const lo = temps.length ? Math.min(...temps) : null;
+        const path = temps.length > 1 ? sparklinePath(temps, 88, 28, 4) : "";
+
         const button = document.createElement("button");
-        button.textContent = m.label;
-        button.className = m.key === selectedMetric ? "active" : "";
+        button.className = "day-tab" + (index === selectedDayIndex ? " active" : "");
+        button.innerHTML =
+          '<div class="dow">' + formatDayLabel(key).split(",")[0].slice(0, 3) +
+          (key === todayKey ? '<span class="today-dot"></span>' : "") + "</div>" +
+          '<div class="date">' + formatDayLabel(key).split(", ")[1] + "</div>" +
+          '<svg width="88" height="28" viewBox="0 0 88 28">' +
+          '<path d="' + path + '" fill="none" stroke="#4a6274" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>' +
+          "</svg>" +
+          '<div class="range mono">' +
+          (hi !== null ? '<span class="hi">' + hi.toFixed(0) + "°</span> " : "") +
+          (lo !== null ? '<span class="lo">' + lo.toFixed(0) + "°</span>" : "") +
+          "</div>";
         button.addEventListener("click", () => {
-          selectedMetric = m.key;
-          renderMetricToggle();
+          selectedDayIndex = index;
+          renderWeek();
           renderChart();
         });
-        metricToggleEl.appendChild(button);
+        weekEl.appendChild(button);
+      });
+    }
+
+    function renderOverlayToggle() {
+      overlayToggleEl.innerHTML = "";
+      for (const overlay of OVERLAYS) {
+        const button = document.createElement("button");
+        button.textContent = overlay.label;
+        button.className = overlay.key === selectedOverlay ? "active" : "";
+        button.addEventListener("click", () => {
+          selectedOverlay = overlay.key;
+          renderOverlayToggle();
+          renderChart();
+        });
+        overlayToggleEl.appendChild(button);
       }
     }
 
-    function renderDayNav() {
-      const key = availableDayKeys[selectedDayIndex];
-      dayLabelEl.textContent = key ? formatDayLabel(key) : "–";
-      prevDayBtn.disabled = selectedDayIndex >= availableDayKeys.length - 1;
-      nextDayBtn.disabled = selectedDayIndex <= 0;
-    }
-
     function renderChart() {
-      renderDayNav();
-      const metric = METRICS.find((m) => m.key === selectedMetric);
       const dayKeyValue = availableDayKeys[selectedDayIndex];
-      const points = (seriesByMetric[selectedMetric] || [])
-        .filter((p) => dayKey(p.time) === dayKeyValue);
+      chartDayLabelEl.textContent = dayKeyValue ? formatDayLabel(dayKeyValue) : "–";
 
-      const labels = points.map((p) => new Date(p.time).toLocaleTimeString([], {
-        hour: "2-digit", minute: "2-digit",
-      }));
-      const values = points.map((p) => p.value);
+      const overlay = OVERLAYS.find((o) => o.key === selectedOverlay);
+      const tempPoints = pointsForDay(TEMP.key, dayKeyValue);
+      const overlayPoints = pointsForDay(overlay.key, dayKeyValue);
+
+      const labels = tempPoints.map((p) => new Date(p.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      const tempValues = tempPoints.map((p) => p.value);
+      const overlayValues = overlayPoints.map((p) => p.value);
+
+      const datasets = [
+        {
+          label: TEMP.label,
+          data: tempValues,
+          yAxisID: "y",
+          borderColor: "#4a6274",
+          backgroundColor: "rgba(74, 98, 116, 0.12)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointBackgroundColor: "#4a6274",
+          pointHoverRadius: 5,
+          order: 1,
+          datalabels: {
+            color: "#6b7280",
+            font: { size: 10 },
+            align: "top",
+            formatter: (v) => v.toFixed(TEMP.decimals) + "°",
+          },
+        },
+        {
+          label: overlay.label,
+          data: overlayValues,
+          yAxisID: "y1",
+          type: overlay.kind === "bar" ? "bar" : "line",
+          borderColor: overlay.color,
+          backgroundColor: overlay.kind === "line" ? overlay.color : overlay.color + "55",
+          fill: overlay.kind === "area",
+          borderDash: overlay.kind === "line" ? [4, 3] : undefined,
+          borderWidth: overlay.kind === "bar" ? 0 : 1.5,
+          tension: 0.3,
+          pointRadius: 0,
+          order: 2,
+          datalabels: { display: false },
+        },
+      ];
 
       if (chart) chart.destroy();
       chart = new Chart(document.getElementById("chart"), {
         type: "line",
-        data: {
-          labels,
-          datasets: [{
-            label: metric.label,
-            data: values,
-            borderColor: "#3b82f6",
-            backgroundColor: "rgba(59, 130, 246, 0.15)",
-            fill: true,
-            tension: 0.3,
-            pointRadius: 3,
-            pointBackgroundColor: "#3b82f6",
-            pointHoverRadius: 5,
-          }],
-        },
+        data: { labels, datasets },
         options: {
           interaction: { mode: "index", intersect: false },
           scales: {
-            x: { ticks: { color: "#9098a8", maxTicksLimit: 12 }, grid: { color: "#2a2e38" } },
+            x: { ticks: { color: "#6b7280", maxTicksLimit: 12 }, grid: { color: "#ded8c8" } },
             y: {
               beginAtZero: true,
-              ticks: { color: "#9098a8" },
-              grid: { color: "#2a2e38" },
-              suggestedMax: Math.max(...values, 1) * 1.25,
+              position: "left",
+              ticks: { color: "#4a6274" },
+              grid: { color: "#ded8c8" },
+              suggestedMax: Math.max(...tempValues, 1) * 1.25,
+              title: { display: true, text: TEMP.unit, color: "#4a6274" },
+            },
+            y1: {
+              beginAtZero: true,
+              position: "right",
+              ticks: { color: overlay.color },
+              grid: { display: false },
+              suggestedMax: Math.max(...overlayValues, 1) * 1.6,
+              title: { display: true, text: overlay.unit, color: overlay.color },
             },
           },
           plugins: {
             legend: { display: false },
-            datalabels: {
-              color: "#c3c9d4",
-              font: { size: 10 },
-              align: "top",
-              formatter: (value) => value.toFixed(metric.decimals) + metric.unit,
-            },
             tooltip: {
               callbacks: {
-                label: (ctx) => metric.label + ": " + ctx.parsed.y.toFixed(metric.decimals) + " " + metric.unit,
+                label: (ctx) => {
+                  const metric = ctx.dataset.label === TEMP.label ? TEMP : overlay;
+                  return metric.label + ": " + ctx.parsed.y.toFixed(metric.decimals) + " " + metric.unit;
+                },
               },
             },
           },
@@ -279,22 +426,10 @@
       });
     }
 
-    prevDayBtn.addEventListener("click", () => {
-      if (selectedDayIndex < availableDayKeys.length - 1) {
-        selectedDayIndex += 1;
-        renderChart();
-      }
-    });
-    nextDayBtn.addEventListener("click", () => {
-      if (selectedDayIndex > 0) {
-        selectedDayIndex -= 1;
-        renderChart();
-      }
-    });
-
     async function init() {
-      renderMetricToggle();
+      renderOverlayToggle();
       await Promise.all([loadCurrent(), loadAllSeries()]);
+      renderWeek();
       renderChart();
     }
 
