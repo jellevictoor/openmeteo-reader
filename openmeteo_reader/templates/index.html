@@ -28,17 +28,31 @@
     .tile .label { font-size: 0.75rem; color: #9098a8; text-transform: uppercase; }
     .tile .value { font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem; }
     #updated { color: #9098a8; font-size: 0.85rem; margin-bottom: 2rem; }
-    .controls { display: flex; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
-    select, button {
+    .controls { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; align-items: center; }
+    button {
       background: #1a1d24;
       color: #e6e6e6;
       border: 1px solid #2a2e38;
       border-radius: 0.375rem;
       padding: 0.4rem 0.75rem;
       font-size: 0.9rem;
+      cursor: pointer;
     }
     button.active { background: #3b82f6; border-color: #3b82f6; }
-    .chart-wrap { background: #1a1d24; border-radius: 0.5rem; padding: 1rem; }
+    .charts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 1rem;
+    }
+    .chart-card { background: #1a1d24; border-radius: 0.5rem; padding: 1rem; }
+    .chart-card h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #9098a8;
+      text-transform: uppercase;
+      margin: 0 0 0.5rem 0;
+    }
+    .chart-card canvas { max-height: 220px; }
   </style>
 </head>
 <body>
@@ -47,14 +61,11 @@
   <div class="tiles" id="tiles"></div>
 
   <div class="controls">
-    <select id="variable"></select>
     <button data-hours="24">24h</button>
     <button data-hours="72" class="active">3d</button>
     <button data-hours="168">7d</button>
   </div>
-  <div class="chart-wrap">
-    <canvas id="chart" height="90"></canvas>
-  </div>
+  <div class="charts" id="charts"></div>
 
   <script>
     const VARIABLES = [
@@ -69,17 +80,18 @@
 
     const tilesEl = document.getElementById("tiles");
     const updatedEl = document.getElementById("updated");
-    const variableSelect = document.getElementById("variable");
+    const chartsEl = document.getElementById("charts");
     const hoursButtons = document.querySelectorAll("button[data-hours]");
 
-    for (const [key, label] of VARIABLES) {
-      const option = document.createElement("option");
-      option.value = key;
-      option.textContent = label;
-      variableSelect.appendChild(option);
+    const charts = {};
+    for (const [key, label, unit] of VARIABLES) {
+      const card = document.createElement("div");
+      card.className = "chart-card";
+      card.innerHTML = '<h2>' + label + ' (' + unit + ')</h2><canvas></canvas>';
+      chartsEl.appendChild(card);
+      charts[key] = { canvas: card.querySelector("canvas"), chart: null, label };
     }
 
-    let chart = null;
     let selectedHours = 72;
 
     async function loadCurrent() {
@@ -103,52 +115,64 @@
       }
     }
 
-    async function loadSeries() {
-      const variable = variableSelect.value;
-      const response = await fetch("/api/series?variable=" + variable + "&hours=" + selectedHours);
-      const points = await response.json();
-
+    function renderChart(key, points) {
+      const entry = charts[key];
       const labels = points.map(p => new Date(p.time).toLocaleString());
       const values = points.map(p => p.value);
-      const [, label] = VARIABLES.find(([key]) => key === variable);
 
-      if (chart) chart.destroy();
-      chart = new Chart(document.getElementById("chart"), {
+      if (entry.chart) entry.chart.destroy();
+      entry.chart = new Chart(entry.canvas, {
         type: "line",
         data: {
           labels,
           datasets: [{
-            label,
+            label: entry.label,
             data: values,
             borderColor: "#3b82f6",
             backgroundColor: "rgba(59, 130, 246, 0.15)",
             fill: true,
             tension: 0.2,
             pointRadius: 0,
+            pointHoverRadius: 4,
           }],
         },
         options: {
+          // intersect:false + mode:"index" is what makes the tooltip trigger
+          // anywhere along the line, not just when the cursor is exactly over
+          // an (invisible, pointRadius:0) point.
+          interaction: { mode: "index", intersect: false },
           scales: {
             x: { ticks: { color: "#9098a8", maxTicksLimit: 8 }, grid: { color: "#2a2e38" } },
-            y: { ticks: { color: "#9098a8" }, grid: { color: "#2a2e38" } },
+            y: {
+              beginAtZero: true,
+              ticks: { color: "#9098a8" },
+              grid: { color: "#2a2e38" },
+            },
           },
-          plugins: { legend: { labels: { color: "#e6e6e6" } } },
+          plugins: { legend: { display: false } },
         },
       });
     }
 
-    variableSelect.addEventListener("change", loadSeries);
+    async function loadAllSeries() {
+      await Promise.all(VARIABLES.map(async ([key]) => {
+        const response = await fetch("/api/series?variable=" + key + "&hours=" + selectedHours);
+        const points = await response.json();
+        renderChart(key, points);
+      }));
+    }
+
     for (const button of hoursButtons) {
       button.addEventListener("click", () => {
         hoursButtons.forEach(b => b.classList.remove("active"));
         button.classList.add("active");
         selectedHours = Number(button.dataset.hours);
-        loadSeries();
+        loadAllSeries();
       });
     }
 
     loadCurrent();
-    loadSeries();
+    loadAllSeries();
   </script>
 </body>
 </html>
