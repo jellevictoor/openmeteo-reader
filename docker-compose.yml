@@ -7,6 +7,7 @@ services:
       - INFLUX_TOKEN=${INFLUX_TOKEN}
       - INFLUX_ORG=${INFLUX_ORG}
       - INFLUX_BUCKET=${INFLUX_BUCKET:-weather}
+      - INFLUX_FORECAST_BUCKET=${INFLUX_FORECAST_BUCKET:-forecast}
     restart: unless-stopped
     networks:
       - jelle_default
@@ -40,6 +41,17 @@ services:
         --influx-token ${INFLUX_TOKEN}
         --influx-org ${INFLUX_ORG}
         --influx-bucket ${INFLUX_BUCKET:-weather}
+      # Offset 5 minutes past the actuals job - no need to run at the exact same
+      # second, and it keeps the two jobs' logs easy to tell apart.
+      ofelia.job-run.openmeteo-forecast.schedule: "0 5 * * * *"
+      ofelia.job-run.openmeteo-forecast.image: "ghcr.io/jellevictoor/openmeteo-reader:latest"
+      ofelia.job-run.openmeteo-forecast.network: "jelle_default"
+      ofelia.job-run.openmeteo-forecast.command: >-
+        forecast
+        --influx-url ${INFLUX_URL:-http://influxdb:8086}
+        --influx-token ${INFLUX_TOKEN}
+        --influx-org ${INFLUX_ORG}
+        --forecast-bucket ${INFLUX_FORECAST_BUCKET:-forecast}
 
 networks:
   jelle_default:

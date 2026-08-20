@@ -1,17 +1,23 @@
 # openmeteo-reader
 
-Fetches hourly weather data for home from Open-Meteo and stores it in InfluxDB, with a
-small website to view current conditions and recent history.
+Fetches weather data for home from Open-Meteo and stores it in InfluxDB, with a small
+website: a live forecast (today + 7 days, with ensemble uncertainty bands) at `/`, and
+an actuals logbook (2019&rarr;now) at `/history`.
 
-Two data sources are used, for different purposes:
+Three data sources are used, for different purposes:
 
-- **Forecast API** (`past_hours`) - the rolling recent window. Its values are model
-  analysis and revise for up to ~3 hours after the fact as observations land, so every
-  hourly run re-fetches and overwrites a trailing buffer, not just the newest hour.
-- **Historical Weather API** (ERA5 reanalysis) - one-off backfill for anything older
-  than the Forecast API's rolling window covers.
+- **Forecast API** (`past_hours`) - the rolling recent window of *actuals*. Its values
+  are model analysis and revise for up to ~3 hours after the fact as observations land,
+  so every hourly run re-fetches and overwrites a trailing buffer, not just the newest
+  hour.
+- **Historical Weather API** (ERA5 reanalysis) - one-off backfill of actuals for
+  anything older than the Forecast API's rolling window covers.
+- **Ensemble API** (DWD ICON, `icon_seamless`) - the forward-looking forecast, today
+  through +7 days. 40 model members per variable are collapsed into min/median/max
+  before storage, not kept raw - the app only needs the spread, not per-member
+  analysis. Covers temperature and precipitation only.
 
-See `../CONTEXT.md` ("Weather domain") for the location, bucket, and schema.
+See `../CONTEXT.md` ("Weather domain") for the location, buckets, and schema.
 
 ## Architecture
 
@@ -45,6 +51,9 @@ uv run python -m openmeteo_reader main
 # One-off historical backfill
 uv run python -m openmeteo_reader backfill --start 2019-01-01
 
+# Refresh the ensemble forecast (run hourly)
+uv run python -m openmeteo_reader forecast
+
 # Serve the website + JSON API
 uv run python -m openmeteo_reader serve
 ```
@@ -56,24 +65,31 @@ uv run python -m openmeteo_reader serve
 | `INFLUX_URL` | Yes | - | InfluxDB URL |
 | `INFLUX_TOKEN` | Yes | - | InfluxDB authentication token |
 | `INFLUX_ORG` | Yes | - | InfluxDB organization |
-| `INFLUX_BUCKET` | No | `weather` | InfluxDB bucket name |
-| `HOME_LATITUDE` | No | 50.99528169318774 | Only relevant to `main`/`backfill` |
-| `HOME_LONGITUDE` | No | 3.2131169748116113 | Only relevant to `main`/`backfill` |
+| `INFLUX_BUCKET` | No | `weather` | Actuals bucket name |
+| `INFLUX_FORECAST_BUCKET` | No | `forecast` | Forecast bucket name |
+| `HOME_LATITUDE` | No | 50.99528169318774 | Only relevant to `main`/`backfill`/`forecast` |
+| `HOME_LONGITUDE` | No | 3.2131169748116113 | Only relevant to `main`/`backfill`/`forecast` |
+| `FORECAST_HORIZON_DAYS` | No | `8` | Only relevant to `forecast` |
 | `HOST` / `PORT` | No | `0.0.0.0` / `8000` | Only relevant to `serve` |
 
 Copy `.env.example` to `.env` and fill in your InfluxDB token/org before deploying.
 
 ## InfluxDB schema
 
-- Bucket: `weather` (configurable via `INFLUX_BUCKET`)
-- Measurement: `openmeteo`
-- Tag: `location=home`
-- Fields: whatever Open-Meteo returned for that hour - the Forecast and Historical
-  APIs don't share an identical variable set (different soil-depth bands, wind-height
-  levels), so older backfilled years and the live rolling window may have slightly
-  different field names for those niche variables. Every field is written as a float,
-  even when Open-Meteo returns it as a JSON integer (humidity, cloud cover, weather
-  codes) - InfluxDB rejects a field written with an inconsistent type across points.
+**Actuals** - bucket `weather` (configurable via `INFLUX_BUCKET`), measurement
+`openmeteo`, tag `location=home`. Fields are whatever Open-Meteo returned for that
+hour - the Forecast and Historical APIs don't share an identical variable set
+(different soil-depth bands, wind-height levels), so older backfilled years and the
+live rolling window may have slightly different field names for those niche
+variables. Every field is written as a float, even when Open-Meteo returns it as a
+JSON integer (humidity, cloud cover, weather codes) - InfluxDB rejects a field
+written with an inconsistent type across points.
+
+**Forecast** - bucket `forecast` (configurable via `INFLUX_FORECAST_BUCKET`), same
+measurement/tag. Fields are `<variable>_min`, `<variable>_median`, `<variable>_max`
+for `temperature_2m` and `precipitation` - the ensemble spread, not raw member
+values. Points are future-dated and get fully overwritten on every `forecast` run
+(models update; they don't accumulate like actuals).
 
 ## Deployment (Core node, `.5`)
 
