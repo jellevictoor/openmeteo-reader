@@ -91,3 +91,25 @@ def test_series_returns_empty_list_when_nothing_matches():
     repo = repository(FakeQueryApi([]))
 
     assert repo.series("temperature_2m", since=datetime(2024, 1, 1, tzinfo=UTC)) == []
+
+
+def test_series_includes_an_explicit_stop_when_until_is_given():
+    query_api = FakeQueryApi([])
+    repo = repository(query_api)
+    since = datetime(2026, 8, 20, tzinfo=UTC)
+    until = datetime(2026, 8, 28, tzinfo=UTC)
+
+    repo.series("temperature_2m", since=since, until=until)
+
+    query = query_api.calls[0]["query"]
+    assert since.isoformat() in query
+    assert until.isoformat() in query
+
+
+def test_series_has_no_explicit_stop_when_until_is_omitted():
+    query_api = FakeQueryApi([])
+    repo = repository(query_api)
+
+    repo.series("temperature_2m", since=datetime(2024, 1, 1, tzinfo=UTC))
+
+    assert "stop:" not in query_api.calls[0]["query"]

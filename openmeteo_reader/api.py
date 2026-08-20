@@ -9,15 +9,22 @@ from fastapi.templating import Jinja2Templates
 
 from openmeteo_reader.ports.weather_query_repository import WeatherQueryRepository
 
-# Global repository instance, set by main.py at startup - mirrors sdm-modbus-reader's
+# Global repository instances, set by main.py at startup - mirrors sdm-modbus-reader's
 # api.py wiring, since this is a separate process/composition root from the importer.
 _repository: WeatherQueryRepository | None = None
+_forecast_repository: WeatherQueryRepository | None = None
 
 
 def set_repository(repository: WeatherQueryRepository | None) -> None:
-    """Set the repository instance to use"""
+    """Set the actuals repository instance to use"""
     global _repository
     _repository = repository
+
+
+def set_forecast_repository(repository: WeatherQueryRepository | None) -> None:
+    """Set the forecast repository instance to use"""
+    global _forecast_repository
+    _forecast_repository = repository
 
 
 app = FastAPI(title="Home Weather")
@@ -56,7 +63,38 @@ async def get_series(variable: str, hours: int = 72):
     return [{"time": time.isoformat(), "value": value} for time, value in points]
 
 
+@app.get("/api/forecast/series")
+async def get_forecast_series(variable: str, days: int = 8):
+    """A variable's min/median/max ensemble spread for the next `days` days"""
+    if _forecast_repository is None:
+        raise HTTPException(status_code=503, detail="Forecast repository not initialized")
+
+    since = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    until = since + timedelta(days=days)
+
+    stats = {}
+    for stat in ("min", "median", "max"):
+        stats[stat] = dict(_forecast_repository.series(f"{variable}_{stat}", since, until))
+
+    times = sorted(set(stats["min"]) | set(stats["median"]) | set(stats["max"]))
+    return [
+        {
+            "time": time.isoformat(),
+            "min": stats["min"].get(time),
+            "median": stats["median"].get(time),
+            "max": stats["max"].get(time),
+        }
+        for time in times
+    ]
+
+
 @app.get("/")
 async def index(request: Request):
-    """Serve the main HTML page"""
+    """Serve the forecast page - the live/default view"""
     return templates.TemplateResponse(request, "index.html")
+
+
+@app.get("/history")
+async def history(request: Request):
+    """Serve the actuals logbook - a reference view, not the live default"""
+    return templates.TemplateResponse(request, "history.html")

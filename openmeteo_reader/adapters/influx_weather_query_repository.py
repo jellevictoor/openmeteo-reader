@@ -38,10 +38,13 @@ class InfluxWeatherQueryRepository(WeatherQueryRepository):
             return None
         return WeatherReading(timestamp=timestamp, location=self.location, values=values)
 
-    def series(self, variable: str, since: datetime) -> list[tuple[datetime, float]]:
+    def series(
+        self, variable: str, since: datetime, until: datetime | None = None
+    ) -> list[tuple[datetime, float]]:
+        stop_clause = f", stop: {until.isoformat()}" if until else ""
         flux = f'''
         from(bucket: "{self.bucket}")
-          |> range(start: {since.isoformat()})
+          |> range(start: {since.isoformat()}{stop_clause})
           |> filter(fn: (r) => r._measurement == "{MEASUREMENT}" and r.location == "{self.location}" and r._field == "{variable}")
           |> sort(columns: ["_time"])
         '''

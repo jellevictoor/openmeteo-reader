@@ -15,11 +15,16 @@ class WeatherQueryRepository(ABC):
         """The most recently stored reading, or None if nothing has been written yet"""
 
     @abstractmethod
-    def series(self, variable: str, since: datetime) -> list[tuple[datetime, float]]:
+    def series(
+        self, variable: str, since: datetime, until: datetime | None = None
+    ) -> list[tuple[datetime, float]]:
         """
-        A single variable's values from `since` up to now, oldest first.
+        A single variable's values from `since` to `until`, oldest first.
 
         Args:
             variable: the field name to read (e.g. "temperature_2m")
             since: earliest timestamp to include
+            until: latest timestamp to include; defaults to now. A forecast bucket
+                holds future-dated points, so callers reading forecast data must
+                pass an explicit future `until`.
         """

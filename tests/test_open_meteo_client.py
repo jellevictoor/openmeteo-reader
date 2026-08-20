@@ -5,6 +5,7 @@ import pytest
 import respx
 
 from openmeteo_reader.adapters.open_meteo_client import (
+    ENSEMBLE_URL,
     FORECAST_URL,
     HISTORICAL_URL,
     OpenMeteoClient,
@@ -129,3 +130,38 @@ def test_fetch_recent_does_not_retry_on_a_non_429_error(client, sleeps):
 
     assert route.call_count == 1
     assert sleeps == []
+
+
+@respx.mock
+def test_fetch_forecast_requests_the_ensemble_api_with_the_icon_model(client):
+    route = respx.get(ENSEMBLE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "hourly": {
+                    "time": ["2026-08-20T00:00"],
+                    "temperature_2m_member01": [15.0],
+                    "temperature_2m_member02": [17.0],
+                }
+            },
+        )
+    )
+
+    readings = client.fetch_forecast(days=8)
+
+    request = route.calls.last.request
+    params = httpx.QueryParams(request.url.query)
+    assert params["latitude"] == "50.995"
+    assert params["longitude"] == "3.213"
+    assert params["models"] == "icon_seamless"
+    assert params["forecast_days"] == "8"
+    assert params["timezone"] == "UTC"
+    assert "temperature_2m" in params["hourly"]
+    assert "precipitation" in params["hourly"]
+
+    assert readings[0].values == {
+        "temperature_2m_min": 15.0,
+        "temperature_2m_median": 16.0,
+        "temperature_2m_max": 17.0,
+    }
+    assert readings[0].location == "home"

@@ -6,12 +6,23 @@ from datetime import date
 
 import httpx
 
+from openmeteo_reader.domain.ensemble_response import parse_ensemble_readings
 from openmeteo_reader.domain.models import WeatherReading
 from openmeteo_reader.domain.open_meteo_response import parse_hourly_readings
+from openmeteo_reader.ports.forecast_source import ForecastSource
 from openmeteo_reader.ports.weather_source import WeatherSource
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 HISTORICAL_URL = "https://archive-api.open-meteo.com/v1/archive"
+ENSEMBLE_URL = "https://ensemble-api.open-meteo.com/v1/ensemble"
+
+# DWD's ICON: the standard reference model for European weather, a good fit for a
+# Belgian home station. 40 members, ~7.5 day horizon.
+ENSEMBLE_MODEL = "icon_seamless"
+# Only the two variables people actually act on day-to-day ("how warm", "will it
+# rain") - not the full curated actuals set, which would be 3.5x the members/writes
+# for spread bands most people won't look at.
+ENSEMBLE_VARIABLES = ["temperature_2m", "precipitation"]
 
 # The Forecast API's rolling window: this is what revises for up to ~3h after the
 # fact as observations land, so it's what feeds the hourly correction job.
@@ -123,7 +134,7 @@ PANEL_TILT_DEGREES = 39
 PANEL_AZIMUTH_DEGREES = -26
 
 
-class OpenMeteoClient(WeatherSource):
+class OpenMeteoClient(WeatherSource, ForecastSource):
     """Fetches weather data for one fixed location from Open-Meteo"""
 
     def __init__(
@@ -165,6 +176,20 @@ class OpenMeteoClient(WeatherSource):
             },
         )
         return parse_hourly_readings(response.json(), location=self._location)
+
+    def fetch_forecast(self, days: int) -> list[WeatherReading]:
+        response = self._get(
+            ENSEMBLE_URL,
+            params={
+                "latitude": self._latitude,
+                "longitude": self._longitude,
+                "hourly": ",".join(ENSEMBLE_VARIABLES),
+                "models": ENSEMBLE_MODEL,
+                "forecast_days": days,
+                "timezone": "UTC",
+            },
+        )
+        return parse_ensemble_readings(response.json(), location=self._location)
 
     def fetch_historical(self, start: date, end: date) -> list[WeatherReading]:
         response = self._get(

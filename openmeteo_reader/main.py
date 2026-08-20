@@ -97,6 +97,49 @@ def backfill(
 
 
 @app.command()
+def forecast(
+    horizon_days: int = typer.Option(
+        8, envvar="FORECAST_HORIZON_DAYS", help="Days ahead to fetch, including today"
+    ),
+    influx_url: str = typer.Option(..., envvar="INFLUX_URL", help="InfluxDB URL"),
+    influx_token: str = typer.Option(
+        ..., envvar="INFLUX_TOKEN", help="InfluxDB authentication token"
+    ),
+    influx_org: str = typer.Option(..., envvar="INFLUX_ORG", help="InfluxDB organization"),
+    forecast_bucket: str = typer.Option(
+        "forecast", envvar="INFLUX_FORECAST_BUCKET", help="InfluxDB bucket name"
+    ),
+    latitude: float = typer.Option(HOME_LATITUDE, envvar="HOME_LATITUDE"),
+    longitude: float = typer.Option(HOME_LONGITUDE, envvar="HOME_LONGITUDE"),
+):
+    """Refresh the ensemble forecast (temperature + precipitation spread). Run hourly."""
+    from influxdb_client import InfluxDBClient
+    from influxdb_client.client.write_api import SYNCHRONOUS
+
+    from openmeteo_reader.adapters.influx_weather_repository import (
+        InfluxWeatherRepository,
+    )
+    from openmeteo_reader.adapters.open_meteo_client import OpenMeteoClient
+    from openmeteo_reader.application.forecast_import_service import (
+        ForecastImportService,
+    )
+
+    influx_client = InfluxDBClient(url=influx_url, token=influx_token, org=influx_org)
+    try:
+        forecast_source = OpenMeteoClient(latitude=latitude, longitude=longitude)
+        repository = InfluxWeatherRepository(
+            bucket=forecast_bucket,
+            org=influx_org,
+            write_api=influx_client.write_api(write_options=SYNCHRONOUS),
+        )
+        service = ForecastImportService(forecast_source, repository, horizon_days)
+        count = service.refresh()
+        logger.info("Wrote %d forecast readings", count)
+    finally:
+        influx_client.close()
+
+
+@app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", envvar="HOST"),
     port: int = typer.Option(8000, envvar="PORT"),
@@ -107,6 +150,9 @@ def serve(
     influx_org: str = typer.Option(..., envvar="INFLUX_ORG", help="InfluxDB organization"),
     influx_bucket: str = typer.Option(
         "weather", envvar="INFLUX_BUCKET", help="InfluxDB bucket name"
+    ),
+    forecast_bucket: str = typer.Option(
+        "forecast", envvar="INFLUX_FORECAST_BUCKET", help="InfluxDB bucket name"
     ),
 ):
     """Serve the website and JSON API, reading whatever the importer has written."""
@@ -119,13 +165,15 @@ def serve(
     )
 
     influx_client = InfluxDBClient(url=influx_url, token=influx_token, org=influx_org)
+    query_api = influx_client.query_api()
     repository = InfluxWeatherQueryRepository(
-        bucket=influx_bucket,
-        org=influx_org,
-        location="home",
-        query_api=influx_client.query_api(),
+        bucket=influx_bucket, org=influx_org, location="home", query_api=query_api
+    )
+    forecast_repository = InfluxWeatherQueryRepository(
+        bucket=forecast_bucket, org=influx_org, location="home", query_api=query_api
     )
     api.set_repository(repository)
+    api.set_forecast_repository(forecast_repository)
 
     try:
         uvicorn.run(api.app, host=host, port=port)

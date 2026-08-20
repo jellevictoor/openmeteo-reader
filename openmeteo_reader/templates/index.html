@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Home Weather</title>
+  <title>Home Weather — Forecast</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
@@ -16,9 +16,7 @@
       --ink: #1f2733;
       --ink-soft: #6b7280;
       --slate: #4a6274;
-      --slate-soft: rgba(74, 98, 116, 0.14);
       --brass: #b8863b;
-      --brass-soft: rgba(184, 134, 59, 0.16);
       --rain: #35577a;
       --rain-soft: rgba(53, 87, 122, 0.22);
       --rule: #ded8c8;
@@ -39,37 +37,9 @@
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--ink-soft);
-      margin: 0 0 0.4rem 0;
+      margin: 0 0 1rem 0;
     }
-
-    .hero {
-      display: flex;
-      align-items: flex-end;
-      gap: 2rem;
-      flex-wrap: wrap;
-      padding-bottom: 1.5rem;
-      border-bottom: 1px solid var(--rule);
-      margin-bottom: 1.75rem;
-    }
-    .hero-reading { display: flex; align-items: center; gap: 0.75rem; }
-    .hero-icon { font-size: 2.75rem; line-height: 1; }
-    .hero-temp { font-size: 3.75rem; font-weight: 500; line-height: 1; }
-    .hero-temp .deg { font-size: 2rem; color: var(--ink-soft); }
-    .hero-stats {
-      display: flex;
-      gap: 1.75rem;
-      flex-wrap: wrap;
-      padding-bottom: 0.4rem;
-    }
-    .hero-stat .label {
-      font-size: 0.7rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--ink-soft);
-      margin-bottom: 0.15rem;
-    }
-    .hero-stat .value { font-size: 1rem; font-weight: 500; }
-    #heroUpdated { color: var(--ink-soft); font-size: 0.8rem; margin-top: 0.75rem; }
+    .eyebrow a { color: inherit; }
 
     .week {
       display: flex;
@@ -81,7 +51,7 @@
       margin-bottom: 1.75rem;
     }
     .day-tab {
-      flex: 1 0 96px;
+      flex: 1 0 100px;
       padding: 0.85rem 0.6rem;
       text-align: center;
       background: none;
@@ -89,7 +59,6 @@
       border-right: 1px solid var(--rule);
       cursor: pointer;
       color: var(--ink);
-      border-radius: 0;
       font-family: inherit;
     }
     .day-tab:last-child { border-right: none; }
@@ -101,8 +70,8 @@
       text-transform: uppercase;
       color: var(--ink-soft);
     }
-    .day-tab .date { font-size: 0.7rem; color: var(--ink-soft); margin-bottom: 0.35rem; }
-    .day-tab svg { display: block; margin: 0 auto 0.35rem; }
+    .day-tab .date { font-size: 0.7rem; color: var(--ink-soft); margin-bottom: 0.3rem; }
+    .day-tab .icon { font-size: 1.3rem; margin-bottom: 0.3rem; }
     .day-tab .range { font-size: 0.78rem; }
     .day-tab .range .hi { font-weight: 600; }
     .day-tab .range .lo { color: var(--ink-soft); }
@@ -117,31 +86,9 @@
       border-radius: 0.6rem;
       padding: 1.25rem 1.5rem 1.5rem;
     }
-    .panel-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-    .overlay-toggle { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-    .overlay-toggle button {
-      font-family: "Archivo", sans-serif;
-      font-size: 0.78rem;
-      background: none;
-      border: 1px solid var(--rule);
-      border-radius: 999px;
-      padding: 0.3rem 0.7rem;
-      color: var(--ink-soft);
-      cursor: pointer;
-    }
-    .overlay-toggle button.active {
-      background: var(--ink);
-      color: var(--card);
-      border-color: var(--ink);
-    }
-    .chart-wrap { max-height: 360px; }
+    .panel-head { margin-bottom: 1rem; }
+    .chart-wrap { max-height: 380px; }
+    .caption { color: var(--ink-soft); font-size: 0.8rem; margin-top: 0.75rem; }
 
     :focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -149,65 +96,32 @@
 </head>
 <body>
   <div class="wrap">
-    <p class="eyebrow">Home station &middot; 50.995&deg;N 3.213&deg;E</p>
-
-    <section class="hero">
-      <div class="hero-reading">
-        <span class="hero-icon" id="heroIcon">–</span>
-        <span class="hero-temp mono" id="heroTemp">–<span class="deg">°C</span></span>
-      </div>
-      <div class="hero-stats" id="heroStats"></div>
-    </section>
-    <p id="heroUpdated" style="margin-top:-1.25rem;">Loading…</p>
+    <p class="eyebrow">
+      Home station forecast &middot; 50.995&deg;N 3.213&deg;E &middot;
+      <a href="/history">History &rarr;</a>
+    </p>
 
     <div class="week" id="week"></div>
 
     <section class="panel">
       <div class="panel-head">
         <p class="eyebrow" id="chartDayLabel" style="margin:0;">–</p>
-        <div class="overlay-toggle" id="overlayToggle"></div>
       </div>
       <div class="chart-wrap">
         <canvas id="chart" height="120"></canvas>
       </div>
+      <p class="caption">
+        Shaded bands show the spread across DWD ICON's 40 ensemble members - the
+        range of what could plausibly happen, not a single fixed prediction.
+      </p>
     </section>
   </div>
 
   <script>
     Chart.register(ChartDataLabels);
 
-    const TEMP = { key: "temperature_2m", label: "Temperature", unit: "°C", decimals: 1 };
-    const OVERLAYS = [
-      { key: "precipitation", label: "Precipitation", unit: "mm", decimals: 1, kind: "bar", color: "#35577a" },
-      { key: "wind_speed_10m", label: "Wind", unit: "km/h", decimals: 1, kind: "line", color: "#b8863b" },
-      { key: "relative_humidity_2m", label: "Humidity", unit: "%", decimals: 0, kind: "area", color: "#4a6274" },
-      { key: "shortwave_radiation", label: "Solar radiation", unit: "W/m²", decimals: 0, kind: "area", color: "#b8863b" },
-      { key: "cloud_cover", label: "Cloud cover", unit: "%", decimals: 0, kind: "area", color: "#6b7280" },
-      { key: "surface_pressure", label: "Pressure", unit: "hPa", decimals: 0, kind: "line", color: "#6b7280" },
-    ];
-    const ALL_METRICS = [TEMP, ...OVERLAYS];
-    const DAYS_OF_HISTORY = 30;
-    const WEEK_LENGTH = 7;
-    const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-      "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-
-    function compassDirection(degrees) {
-      return COMPASS[Math.round(degrees / 22.5) % 16];
-    }
-
-    function weatherIcon(code, isDay) {
-      if (code === 0) return isDay ? "☀️" : "🌙";
-      if (code <= 2) return isDay ? "🌤️" : "☁️";
-      if (code === 3) return "☁️";
-      if (code === 45 || code === 48) return "🌫️";
-      if (code >= 51 && code <= 57) return "🌦️";
-      if (code >= 61 && code <= 67) return "🌧️";
-      if (code >= 71 && code <= 77) return "❄️";
-      if (code === 80 || code === 81 || code === 82) return "🌧️";
-      if (code === 85 || code === 86) return "🌨️";
-      if (code >= 95) return "⛈️";
-      return "🌡️";
-    }
+    const HORIZON_DAYS = 8;
+    const RAIN_ICON_THRESHOLD_MM = 0.2;
 
     function dayKey(isoTime) { return isoTime.slice(0, 10); }
 
@@ -230,83 +144,46 @@
       }).join(" ");
     }
 
-    const heroIconEl = document.getElementById("heroIcon");
-    const heroTempEl = document.getElementById("heroTemp");
-    const heroStatsEl = document.getElementById("heroStats");
-    const heroUpdatedEl = document.getElementById("heroUpdated");
     const weekEl = document.getElementById("week");
-    const overlayToggleEl = document.getElementById("overlayToggle");
     const chartDayLabelEl = document.getElementById("chartDayLabel");
 
-    let seriesByMetric = {};
-    let availableDayKeys = []; // most recent first
-    let selectedDayIndex = 0;
-    let selectedOverlay = OVERLAYS[0].key;
+    let tempSeries = [];    // [{time, min, median, max}]
+    let precipSeries = [];  // [{time, min, median, max}]
+    let availableDayKeys = [];
+    let selectedDayIndex = 0; // 0 = today
     let chart = null;
 
-    async function loadCurrent() {
-      const response = await fetch("/api/current");
-      if (!response.ok) {
-        heroUpdatedEl.textContent = "No data yet";
-        return;
-      }
-      const data = await response.json();
-      const v = data.values;
-
-      heroUpdatedEl.textContent = "As of " + new Date(data.timestamp).toLocaleString();
-      heroIconEl.textContent = weatherIcon(v.weather_code, v.is_day !== 0);
-      heroTempEl.innerHTML = (v.temperature_2m !== undefined ? v.temperature_2m.toFixed(1) : "–") + '<span class="deg">°C</span>';
-
-      const stats = [];
-      if (v.apparent_temperature !== undefined) stats.push(["Feels like", v.apparent_temperature.toFixed(1) + "°C"]);
-      if (v.wind_speed_10m !== undefined) {
-        const dir = v.wind_direction_10m !== undefined ? " " + compassDirection(v.wind_direction_10m) : "";
-        stats.push(["Wind", v.wind_speed_10m.toFixed(1) + " km/h" + dir]);
-      }
-      if (v.relative_humidity_2m !== undefined) stats.push(["Humidity", v.relative_humidity_2m.toFixed(0) + "%"]);
-      if (v.surface_pressure !== undefined) stats.push(["Pressure", v.surface_pressure.toFixed(0) + " hPa"]);
-      heroStatsEl.innerHTML = stats.map(([label, value]) =>
-        '<div class="hero-stat"><div class="label">' + label + '</div><div class="value">' + value + "</div></div>"
-      ).join("");
+    async function loadSeries(variable) {
+      const response = await fetch("/api/forecast/series?variable=" + variable + "&days=" + HORIZON_DAYS);
+      if (!response.ok) return [];
+      return response.json();
     }
 
-    async function loadAllSeries() {
-      const results = await Promise.all(ALL_METRICS.map(async (m) => {
-        const response = await fetch("/api/series?variable=" + m.key + "&hours=" + (DAYS_OF_HISTORY * 24));
-        return [m.key, await response.json()];
-      }));
-      seriesByMetric = Object.fromEntries(results);
-
-      const allKeys = new Set();
-      for (const points of Object.values(seriesByMetric)) {
-        for (const p of points) allKeys.add(dayKey(p.time));
-      }
-      availableDayKeys = Array.from(allKeys).sort().reverse();
-      selectedDayIndex = 0;
-    }
-
-    function pointsForDay(metricKey, dayKeyValue) {
-      return (seriesByMetric[metricKey] || []).filter((p) => dayKey(p.time) === dayKeyValue);
+    function pointsForDay(series, dayKeyValue) {
+      return series.filter((p) => dayKey(p.time) === dayKeyValue);
     }
 
     function renderWeek() {
       const todayKey = availableDayKeys[0];
-      const weekKeys = availableDayKeys.slice(0, WEEK_LENGTH);
 
       weekEl.innerHTML = "";
-      weekKeys.forEach((key, index) => {
-        const temps = pointsForDay(TEMP.key, key).map((p) => p.value);
-        const hi = temps.length ? Math.max(...temps) : null;
-        const lo = temps.length ? Math.min(...temps) : null;
-        const path = temps.length > 1 ? sparklinePath(temps, 88, 28, 4) : "";
+      availableDayKeys.forEach((key, index) => {
+        const dayTemps = pointsForDay(tempSeries, key);
+        const dayPrecip = pointsForDay(precipSeries, key);
+        const medians = dayTemps.map((p) => p.median).filter((v) => v !== null && v !== undefined);
+        const hi = medians.length ? Math.max(...medians) : null;
+        const lo = medians.length ? Math.min(...medians) : null;
+        const path = medians.length > 1 ? sparklinePath(medians, 92, 26, 4) : "";
+        const rainExpected = dayPrecip.some((p) => (p.median ?? 0) >= RAIN_ICON_THRESHOLD_MM);
 
         const button = document.createElement("button");
         button.className = "day-tab" + (index === selectedDayIndex ? " active" : "");
         button.innerHTML =
-          '<div class="dow">' + formatDayLabel(key).split(",")[0].slice(0, 3) +
+          '<div class="dow">' + (index === 0 ? "Today" : formatDayLabel(key).split(",")[0].slice(0, 3)) +
           (key === todayKey ? '<span class="today-dot"></span>' : "") + "</div>" +
           '<div class="date">' + formatDayLabel(key).split(", ")[1] + "</div>" +
-          '<svg width="88" height="28" viewBox="0 0 88 28">' +
+          '<div class="icon">' + (rainExpected ? "🌦️" : "☀️") + "</div>" +
+          '<svg width="92" height="26" viewBox="0 0 92 26" style="display:block;margin:0 auto 0.3rem;">' +
           '<path d="' + path + '" fill="none" stroke="#4a6274" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>' +
           "</svg>" +
           '<div class="range mono">' +
@@ -322,65 +199,86 @@
       });
     }
 
-    function renderOverlayToggle() {
-      overlayToggleEl.innerHTML = "";
-      for (const overlay of OVERLAYS) {
-        const button = document.createElement("button");
-        button.textContent = overlay.label;
-        button.className = overlay.key === selectedOverlay ? "active" : "";
-        button.addEventListener("click", () => {
-          selectedOverlay = overlay.key;
-          renderOverlayToggle();
-          renderChart();
-        });
-        overlayToggleEl.appendChild(button);
-      }
-    }
-
     function renderChart() {
       const dayKeyValue = availableDayKeys[selectedDayIndex];
-      chartDayLabelEl.textContent = dayKeyValue ? formatDayLabel(dayKeyValue) : "–";
+      chartDayLabelEl.textContent = "Hourly forecast · " + (dayKeyValue ? formatDayLabel(dayKeyValue) : "–");
 
-      const overlay = OVERLAYS.find((o) => o.key === selectedOverlay);
-      const tempPoints = pointsForDay(TEMP.key, dayKeyValue);
-      const overlayPoints = pointsForDay(overlay.key, dayKeyValue);
-
-      const labels = tempPoints.map((p) => new Date(p.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-      const tempValues = tempPoints.map((p) => p.value);
-      const overlayValues = overlayPoints.map((p) => p.value);
+      const tempDay = pointsForDay(tempSeries, dayKeyValue);
+      const precipDay = pointsForDay(precipSeries, dayKeyValue);
+      const labels = tempDay.map((p) => new Date(p.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
 
       const datasets = [
         {
-          label: TEMP.label,
-          data: tempValues,
+          label: "Temperature min",
+          data: tempDay.map((p) => p.min),
+          yAxisID: "y",
+          borderColor: "transparent",
+          backgroundColor: "transparent",
+          pointRadius: 0,
+          fill: false,
+          order: 4,
+          datalabels: { display: false },
+        },
+        {
+          label: "Temperature range",
+          data: tempDay.map((p) => p.max),
+          yAxisID: "y",
+          borderColor: "transparent",
+          backgroundColor: "rgba(74, 98, 116, 0.16)",
+          pointRadius: 0,
+          fill: "-1",
+          order: 3,
+          datalabels: { display: false },
+        },
+        {
+          label: "Temperature",
+          data: tempDay.map((p) => p.median),
           yAxisID: "y",
           borderColor: "#4a6274",
-          backgroundColor: "rgba(74, 98, 116, 0.12)",
-          fill: true,
-          tension: 0.3,
+          backgroundColor: "#4a6274",
           pointRadius: 3,
           pointBackgroundColor: "#4a6274",
           pointHoverRadius: 5,
+          fill: false,
+          tension: 0.3,
           order: 1,
           datalabels: {
             color: "#6b7280",
             font: { size: 10 },
             align: "top",
-            formatter: (v) => v.toFixed(TEMP.decimals) + "°",
+            formatter: (v) => (v === null || v === undefined ? "" : v.toFixed(1) + "°"),
           },
         },
         {
-          label: overlay.label,
-          data: overlayValues,
+          label: "Precipitation min",
+          data: precipDay.map((p) => p.min),
           yAxisID: "y1",
-          type: overlay.kind === "bar" ? "bar" : "line",
-          borderColor: overlay.color,
-          backgroundColor: overlay.kind === "line" ? overlay.color : overlay.color + "55",
-          fill: overlay.kind === "area",
-          borderDash: overlay.kind === "line" ? [4, 3] : undefined,
-          borderWidth: overlay.kind === "bar" ? 0 : 1.5,
-          tension: 0.3,
+          type: "line",
+          borderColor: "transparent",
+          backgroundColor: "transparent",
           pointRadius: 0,
+          fill: false,
+          order: 6,
+          datalabels: { display: false },
+        },
+        {
+          label: "Precipitation range",
+          data: precipDay.map((p) => p.max),
+          yAxisID: "y1",
+          type: "line",
+          borderColor: "transparent",
+          backgroundColor: "rgba(53, 87, 122, 0.18)",
+          pointRadius: 0,
+          fill: "-1",
+          order: 5,
+          datalabels: { display: false },
+        },
+        {
+          label: "Precipitation",
+          data: precipDay.map((p) => p.median),
+          yAxisID: "y1",
+          type: "bar",
+          backgroundColor: "rgba(53, 87, 122, 0.55)",
           order: 2,
           datalabels: { display: false },
         },
@@ -399,25 +297,25 @@
               position: "left",
               ticks: { color: "#4a6274" },
               grid: { color: "#ded8c8" },
-              suggestedMax: Math.max(...tempValues, 1) * 1.25,
-              title: { display: true, text: TEMP.unit, color: "#4a6274" },
+              title: { display: true, text: "°C", color: "#4a6274" },
             },
             y1: {
               beginAtZero: true,
               position: "right",
-              ticks: { color: overlay.color },
+              ticks: { color: "#35577a" },
               grid: { display: false },
-              suggestedMax: Math.max(...overlayValues, 1) * 1.6,
-              title: { display: true, text: overlay.unit, color: overlay.color },
+              suggestedMax: 5,
+              title: { display: true, text: "mm", color: "#35577a" },
             },
           },
           plugins: {
             legend: { display: false },
             tooltip: {
+              filter: (item) => !item.dataset.label.includes("min") && !item.dataset.label.includes("range"),
               callbacks: {
                 label: (ctx) => {
-                  const metric = ctx.dataset.label === TEMP.label ? TEMP : overlay;
-                  return metric.label + ": " + ctx.parsed.y.toFixed(metric.decimals) + " " + metric.unit;
+                  const unit = ctx.dataset.yAxisID === "y" ? "°C" : "mm";
+                  return ctx.dataset.label + ": " + ctx.parsed.y.toFixed(1) + " " + unit;
                 },
               },
             },
@@ -427,8 +325,16 @@
     }
 
     async function init() {
-      renderOverlayToggle();
-      await Promise.all([loadCurrent(), loadAllSeries()]);
+      const [temp, precip] = await Promise.all([
+        loadSeries("temperature_2m"),
+        loadSeries("precipitation"),
+      ]);
+      tempSeries = temp;
+      precipSeries = precip;
+
+      const keys = new Set([...temp, ...precip].map((p) => dayKey(p.time)));
+      availableDayKeys = Array.from(keys).sort();
+
       renderWeek();
       renderChart();
     }
