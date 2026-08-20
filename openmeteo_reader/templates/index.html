@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Home Weather</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <style>
+    * { box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #0f1115;
@@ -13,24 +15,46 @@
       margin: 0;
       padding: 2rem;
     }
-    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; }
-    .tiles {
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 1.5rem 0; }
+
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      background: #1a1d24;
+      border-radius: 0.75rem;
+      padding: 1.5rem 2rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .hero-icon { font-size: 3.5rem; line-height: 1; }
+    .hero-temp { font-size: 3rem; font-weight: 700; min-width: 6rem; }
+    .hero-meta {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem 1.5rem;
+      flex: 1;
+      color: #c3c9d4;
+      font-size: 0.9rem;
+    }
+    .hero-meta .label { color: #9098a8; font-size: 0.75rem; text-transform: uppercase; }
+    .hero-meta .value { font-size: 1.05rem; color: #e6e6e6; font-weight: 600; }
+    #heroUpdated { color: #9098a8; font-size: 0.8rem; margin-bottom: 1.5rem; }
+
+    .chart-section { background: #1a1d24; border-radius: 0.75rem; padding: 1.25rem 1.5rem; }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 0.75rem;
-      margin-bottom: 2rem;
+      margin-bottom: 1rem;
     }
-    .tile {
-      background: #1a1d24;
-      border-radius: 0.5rem;
-      padding: 1rem;
-    }
-    .tile .label { font-size: 0.75rem; color: #9098a8; text-transform: uppercase; }
-    .tile .value { font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem; }
-    #updated { color: #9098a8; font-size: 0.85rem; margin-bottom: 2rem; }
-    .controls { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; align-items: center; }
+    .metric-toggle { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .day-nav { display: flex; align-items: center; gap: 0.75rem; }
+    .day-nav span { min-width: 9rem; text-align: center; font-size: 0.9rem; color: #c3c9d4; }
     button {
-      background: #1a1d24;
+      background: #22262f;
       color: #e6e6e6;
       border: 1px solid #2a2e38;
       border-radius: 0.375rem;
@@ -38,141 +62,243 @@
       font-size: 0.9rem;
       cursor: pointer;
     }
+    button:hover:not(:disabled) { border-color: #3b82f6; }
+    button:disabled { opacity: 0.4; cursor: default; }
     button.active { background: #3b82f6; border-color: #3b82f6; }
-    .charts {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-      gap: 1rem;
-    }
-    .chart-card { background: #1a1d24; border-radius: 0.5rem; padding: 1rem; }
-    .chart-card h2 {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #9098a8;
-      text-transform: uppercase;
-      margin: 0 0 0.5rem 0;
-    }
-    .chart-card canvas { max-height: 220px; }
+    .chart-wrap { max-height: 380px; }
   </style>
 </head>
 <body>
   <h1>Home Weather</h1>
-  <div id="updated">Loading…</div>
-  <div class="tiles" id="tiles"></div>
+  <div id="heroUpdated">Loading…</div>
 
-  <div class="controls">
-    <button data-hours="24">24h</button>
-    <button data-hours="72" class="active">3d</button>
-    <button data-hours="168">7d</button>
-  </div>
-  <div class="charts" id="charts"></div>
+  <section class="hero" id="hero">
+    <div class="hero-icon" id="heroIcon">–</div>
+    <div class="hero-temp" id="heroTemp">–°</div>
+    <div class="hero-meta" id="heroMeta"></div>
+  </section>
+
+  <section class="chart-section">
+    <div class="toolbar">
+      <div class="metric-toggle" id="metricToggle"></div>
+      <div class="day-nav">
+        <button id="prevDay" aria-label="Previous day">‹</button>
+        <span id="dayLabel">–</span>
+        <button id="nextDay" aria-label="Next day">›</button>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart" height="110"></canvas>
+    </div>
+  </section>
 
   <script>
-    const VARIABLES = [
-      ["temperature_2m", "Temperature", "°C"],
-      ["relative_humidity_2m", "Humidity", "%"],
-      ["precipitation", "Precipitation", "mm"],
-      ["wind_speed_10m", "Wind speed", "km/h"],
-      ["shortwave_radiation", "Solar radiation", "W/m²"],
-      ["cloud_cover", "Cloud cover", "%"],
-      ["surface_pressure", "Pressure", "hPa"],
+    Chart.register(ChartDataLabels);
+
+    const METRICS = [
+      { key: "temperature_2m", label: "Temperature", unit: "°C", decimals: 1 },
+      { key: "precipitation", label: "Precipitation", unit: "mm", decimals: 1 },
+      { key: "wind_speed_10m", label: "Wind speed", unit: "km/h", decimals: 1 },
+      { key: "relative_humidity_2m", label: "Humidity", unit: "%", decimals: 0 },
+      { key: "shortwave_radiation", label: "Solar radiation", unit: "W/m²", decimals: 0 },
+      { key: "cloud_cover", label: "Cloud cover", unit: "%", decimals: 0 },
+      { key: "surface_pressure", label: "Pressure", unit: "hPa", decimals: 0 },
     ];
+    const DAYS_OF_HISTORY = 30;
+    const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+      "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
 
-    const tilesEl = document.getElementById("tiles");
-    const updatedEl = document.getElementById("updated");
-    const chartsEl = document.getElementById("charts");
-    const hoursButtons = document.querySelectorAll("button[data-hours]");
-
-    const charts = {};
-    for (const [key, label, unit] of VARIABLES) {
-      const card = document.createElement("div");
-      card.className = "chart-card";
-      card.innerHTML = '<h2>' + label + ' (' + unit + ')</h2><canvas></canvas>';
-      chartsEl.appendChild(card);
-      charts[key] = { canvas: card.querySelector("canvas"), chart: null, label };
+    function compassDirection(degrees) {
+      return COMPASS[Math.round(degrees / 22.5) % 16];
     }
 
-    let selectedHours = 72;
+    function weatherIcon(code, isDay) {
+      if (code === 0) return isDay ? "☀️" : "🌙";
+      if (code <= 2) return isDay ? "🌤️" : "☁️";
+      if (code === 3) return "☁️";
+      if (code === 45 || code === 48) return "🌫️";
+      if (code >= 51 && code <= 57) return "🌦️";
+      if (code >= 61 && code <= 67) return "🌧️";
+      if (code >= 71 && code <= 77) return "❄️";
+      if (code === 80 || code === 81 || code === 82) return "🌧️";
+      if (code === 85 || code === 86) return "🌨️";
+      if (code >= 95) return "⛈️";
+      return "🌡️";
+    }
+
+    function dayKey(isoTime) {
+      return isoTime.slice(0, 10);
+    }
+
+    function formatDayLabel(key) {
+      const d = new Date(key + "T00:00:00Z");
+      return d.toLocaleDateString(undefined, {
+        weekday: "long", month: "short", day: "numeric", timeZone: "UTC",
+      });
+    }
+
+    const heroIconEl = document.getElementById("heroIcon");
+    const heroTempEl = document.getElementById("heroTemp");
+    const heroMetaEl = document.getElementById("heroMeta");
+    const heroUpdatedEl = document.getElementById("heroUpdated");
+    const metricToggleEl = document.getElementById("metricToggle");
+    const dayLabelEl = document.getElementById("dayLabel");
+    const prevDayBtn = document.getElementById("prevDay");
+    const nextDayBtn = document.getElementById("nextDay");
+
+    let seriesByMetric = {};
+    let availableDayKeys = [];
+    let selectedMetric = METRICS[0].key;
+    let selectedDayIndex = 0; // index into availableDayKeys, 0 = most recent
+    let chart = null;
 
     async function loadCurrent() {
       const response = await fetch("/api/current");
       if (!response.ok) {
-        updatedEl.textContent = "No data yet";
+        heroUpdatedEl.textContent = "No data yet";
         return;
       }
       const data = await response.json();
-      updatedEl.textContent = "Last updated " + new Date(data.timestamp).toLocaleString();
+      const v = data.values;
 
-      tilesEl.innerHTML = "";
-      for (const [key, label, unit] of VARIABLES) {
-        if (!(key in data.values)) continue;
-        const tile = document.createElement("div");
-        tile.className = "tile";
-        tile.innerHTML =
-          '<div class="label">' + label + '</div>' +
-          '<div class="value">' + data.values[key].toFixed(1) + " " + unit + '</div>';
-        tilesEl.appendChild(tile);
+      heroUpdatedEl.textContent = "Last updated " + new Date(data.timestamp).toLocaleString();
+      heroIconEl.textContent = weatherIcon(v.weather_code, v.is_day !== 0);
+      heroTempEl.textContent = (v.temperature_2m !== undefined ? v.temperature_2m.toFixed(1) : "–") + "°C";
+
+      const meta = [];
+      if (v.apparent_temperature !== undefined) {
+        meta.push(["Feels like", v.apparent_temperature.toFixed(1) + "°C"]);
+      }
+      if (v.wind_speed_10m !== undefined) {
+        const dir = v.wind_direction_10m !== undefined ? " " + compassDirection(v.wind_direction_10m) : "";
+        meta.push(["Wind", v.wind_speed_10m.toFixed(1) + " km/h" + dir]);
+      }
+      if (v.relative_humidity_2m !== undefined) {
+        meta.push(["Humidity", v.relative_humidity_2m.toFixed(0) + "%"]);
+      }
+      if (v.surface_pressure !== undefined) {
+        meta.push(["Pressure", v.surface_pressure.toFixed(0) + " hPa"]);
+      }
+      heroMetaEl.innerHTML = meta.map(([label, value]) =>
+        '<div><div class="label">' + label + '</div><div class="value">' + value + '</div></div>'
+      ).join("");
+    }
+
+    async function loadAllSeries() {
+      const results = await Promise.all(METRICS.map(async (m) => {
+        const response = await fetch("/api/series?variable=" + m.key + "&hours=" + (DAYS_OF_HISTORY * 24));
+        return [m.key, await response.json()];
+      }));
+      seriesByMetric = Object.fromEntries(results);
+
+      const allKeys = new Set();
+      for (const points of Object.values(seriesByMetric)) {
+        for (const p of points) allKeys.add(dayKey(p.time));
+      }
+      availableDayKeys = Array.from(allKeys).sort().reverse(); // most recent first
+      selectedDayIndex = 0;
+    }
+
+    function renderMetricToggle() {
+      metricToggleEl.innerHTML = "";
+      for (const m of METRICS) {
+        const button = document.createElement("button");
+        button.textContent = m.label;
+        button.className = m.key === selectedMetric ? "active" : "";
+        button.addEventListener("click", () => {
+          selectedMetric = m.key;
+          renderMetricToggle();
+          renderChart();
+        });
+        metricToggleEl.appendChild(button);
       }
     }
 
-    function renderChart(key, points) {
-      const entry = charts[key];
-      const labels = points.map(p => new Date(p.time).toLocaleString());
-      const values = points.map(p => p.value);
+    function renderDayNav() {
+      const key = availableDayKeys[selectedDayIndex];
+      dayLabelEl.textContent = key ? formatDayLabel(key) : "–";
+      prevDayBtn.disabled = selectedDayIndex >= availableDayKeys.length - 1;
+      nextDayBtn.disabled = selectedDayIndex <= 0;
+    }
 
-      if (entry.chart) entry.chart.destroy();
-      entry.chart = new Chart(entry.canvas, {
+    function renderChart() {
+      renderDayNav();
+      const metric = METRICS.find((m) => m.key === selectedMetric);
+      const dayKeyValue = availableDayKeys[selectedDayIndex];
+      const points = (seriesByMetric[selectedMetric] || [])
+        .filter((p) => dayKey(p.time) === dayKeyValue);
+
+      const labels = points.map((p) => new Date(p.time).toLocaleTimeString([], {
+        hour: "2-digit", minute: "2-digit",
+      }));
+      const values = points.map((p) => p.value);
+
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById("chart"), {
         type: "line",
         data: {
           labels,
           datasets: [{
-            label: entry.label,
+            label: metric.label,
             data: values,
             borderColor: "#3b82f6",
             backgroundColor: "rgba(59, 130, 246, 0.15)",
             fill: true,
-            tension: 0.2,
-            pointRadius: 0,
-            pointHoverRadius: 4,
+            tension: 0.3,
+            pointRadius: 3,
+            pointBackgroundColor: "#3b82f6",
+            pointHoverRadius: 5,
           }],
         },
         options: {
-          // intersect:false + mode:"index" is what makes the tooltip trigger
-          // anywhere along the line, not just when the cursor is exactly over
-          // an (invisible, pointRadius:0) point.
           interaction: { mode: "index", intersect: false },
           scales: {
-            x: { ticks: { color: "#9098a8", maxTicksLimit: 8 }, grid: { color: "#2a2e38" } },
+            x: { ticks: { color: "#9098a8", maxTicksLimit: 12 }, grid: { color: "#2a2e38" } },
             y: {
               beginAtZero: true,
               ticks: { color: "#9098a8" },
               grid: { color: "#2a2e38" },
+              suggestedMax: Math.max(...values, 1) * 1.25,
             },
           },
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            datalabels: {
+              color: "#c3c9d4",
+              font: { size: 10 },
+              align: "top",
+              formatter: (value) => value.toFixed(metric.decimals) + metric.unit,
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => metric.label + ": " + ctx.parsed.y.toFixed(metric.decimals) + " " + metric.unit,
+              },
+            },
+          },
         },
       });
     }
 
-    async function loadAllSeries() {
-      await Promise.all(VARIABLES.map(async ([key]) => {
-        const response = await fetch("/api/series?variable=" + key + "&hours=" + selectedHours);
-        const points = await response.json();
-        renderChart(key, points);
-      }));
+    prevDayBtn.addEventListener("click", () => {
+      if (selectedDayIndex < availableDayKeys.length - 1) {
+        selectedDayIndex += 1;
+        renderChart();
+      }
+    });
+    nextDayBtn.addEventListener("click", () => {
+      if (selectedDayIndex > 0) {
+        selectedDayIndex -= 1;
+        renderChart();
+      }
+    });
+
+    async function init() {
+      renderMetricToggle();
+      await Promise.all([loadCurrent(), loadAllSeries()]);
+      renderChart();
     }
 
-    for (const button of hoursButtons) {
-      button.addEventListener("click", () => {
-        hoursButtons.forEach(b => b.classList.remove("active"));
-        button.classList.add("active");
-        selectedHours = Number(button.dataset.hours);
-        loadAllSeries();
-      });
-    }
-
-    loadCurrent();
-    loadAllSeries();
+    init();
   </script>
 </body>
 </html>
