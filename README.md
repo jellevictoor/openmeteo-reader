@@ -87,9 +87,14 @@ written with an inconsistent type across points.
 
 **Forecast** - bucket `forecast` (configurable via `INFLUX_FORECAST_BUCKET`), same
 measurement/tag. Fields are `<variable>_min`, `<variable>_median`, `<variable>_max`
-for `temperature_2m` and `precipitation` - the ensemble spread, not raw member
-values. Points are future-dated and get fully overwritten on every `forecast` run
-(models update; they don't accumulate like actuals).
+for `temperature_2m`, `precipitation`, and `wind_speed_10m` - the ensemble spread,
+not raw member values. `precipitation` additionally gets `precipitation_total_min/
+median/max`: each member's own running total for the UTC day, reduced to
+min/median/max, used for the day's expected precipitation total. Summing the
+hourly `precipitation_median` values instead would misstate it - see the comment
+on `CUMULATIVE_VARIABLES` in `domain/ensemble_response.py`. Points are future-dated
+and get fully overwritten on every `forecast` run (models update; they don't
+accumulate like actuals).
 
 ## Deployment (Core node, `.5`)
 
