@@ -43,6 +43,13 @@
     }
     .eyebrow a { color: inherit; }
 
+    .forecast-summary {
+      font-size: 1.1rem;
+      color: var(--ink);
+      margin: 0 0 1.25rem 0;
+    }
+    .forecast-summary:empty { display: none; }
+
     .hero {
       display: flex;
       align-items: flex-end;
@@ -166,6 +173,8 @@
       <a href="/history">History &rarr;</a>
     </p>
 
+    <p class="forecast-summary" id="forecastSummary"></p>
+
     <section class="hero">
       <div class="hero-reading">
         <span class="hero-icon" id="heroIcon">–</span>
@@ -258,6 +267,7 @@
     const heroUpdatedEl = document.getElementById("heroUpdated");
     const weekEl = document.getElementById("week");
     const chartDayLabelEl = document.getElementById("chartDayLabel");
+    const forecastSummaryEl = document.getElementById("forecastSummary");
 
     async function loadCurrent() {
       const response = await fetch("/api/current");
@@ -298,6 +308,65 @@
       precipStat.className = "hero-stat";
       precipStat.innerHTML = '<div class="label">Precip</div><div class="value">' + soFar.toFixed(1) + " of " + expected.toFixed(1) + " mm</div>";
       heroStatsEl.appendChild(precipStat);
+    }
+
+    const RAIN_THRESHOLD_MM = 0.2;
+    const WIDE_TEMP_SPREAD_C = 3;
+
+    function timeBucket(hour) {
+      if (hour < 12) return "this morning";
+      if (hour < 18) return "this afternoon";
+      return "tonight";
+    }
+
+    // Turns the ensemble spread into plain words instead of a chart or a
+    // member count - "32 of 40 members agree" tested badly ("that's weather-
+    // nerd talk wearing a trenchcoat"; "I heard that and thought you were
+    // talking about a union vote"). We don't store literal per-member counts
+    // (only min/median/max), so the median-vs-spread relationship stands in
+    // for agreement: a rainy median means most of the ensemble spread agrees,
+    // a dry median with a wet max means only the edge cases do.
+    function renderForecastSummary() {
+      const todayKey = availableDayKeys[0];
+      if (!todayKey) return;
+
+      const nowMs = Date.now();
+      const remainingToday = pointsForDay(precipSeries, todayKey)
+        .filter((p) => new Date(p.time).getTime() >= nowMs);
+
+      let sentence;
+      if (!remainingToday.length) {
+        sentence = "No more hours forecast for today.";
+      } else {
+        const peakMedian = Math.max(...remainingToday.map((p) => p.median ?? 0));
+        const peakMax = Math.max(...remainingToday.map((p) => p.max ?? 0));
+        const peakHour = remainingToday.reduce((best, p) =>
+          (p.median ?? 0) > (best.median ?? 0) ? p : best
+        );
+        const period = timeBucket(new Date(peakHour.time).getHours());
+
+        if (peakMedian >= RAIN_THRESHOLD_MM) {
+          sentence = "Rain likely " + period + ".";
+        } else if (peakMax >= RAIN_THRESHOLD_MM) {
+          sentence = "Rain possible " + period + " - could go either way.";
+        } else {
+          sentence = "Rain unlikely for the rest of today.";
+        }
+      }
+
+      const tomorrowKey = availableDayKeys[1];
+      const tomorrowTemps = tomorrowKey ? pointsForDay(tempSeries, tomorrowKey) : [];
+      if (tomorrowTemps.length) {
+        const peak = tomorrowTemps.reduce((best, p) =>
+          (p.median ?? -Infinity) > (best.median ?? -Infinity) ? p : best
+        );
+        if (peak.max !== null && peak.max !== undefined && peak.min !== null && peak.min !== undefined
+          && (peak.max - peak.min) > WIDE_TEMP_SPREAD_C) {
+          sentence += " Confidence is lower than usual the next couple days.";
+        }
+      }
+
+      forecastSummaryEl.textContent = sentence;
     }
 
     let tempSeries = [];      // [{time, min, median, max}]
@@ -674,6 +743,7 @@
       renderWeek();
       renderChart();
       renderHeroPrecip();
+      renderForecastSummary();
     }
 
     init();
