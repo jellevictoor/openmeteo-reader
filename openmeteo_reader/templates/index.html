@@ -44,9 +44,13 @@
     .eyebrow a { color: inherit; }
 
     .forecast-summary {
-      font-size: 1.1rem;
+      font-size: 1.65rem;
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
       color: var(--ink);
-      margin: 0 0 1.25rem 0;
+      margin: 0 0 1.5rem 0;
+      max-width: 34ch;
     }
     .forecast-summary:empty { display: none; }
 
@@ -151,6 +155,7 @@
       .hero { gap: 1rem; padding-bottom: 1.1rem; margin-bottom: 1.25rem; }
       .hero-icon { font-size: 2.1rem; }
       .hero-temp { font-size: 2.75rem; }
+      .forecast-summary { font-size: 1.3rem; max-width: none; }
       .hero-temp .deg { font-size: 1.4rem; }
       .hero-stats { gap: 1rem 1.25rem; }
       /* A left divider only reads as "separator" on one unbroken row - once
