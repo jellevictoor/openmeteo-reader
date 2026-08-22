@@ -19,10 +19,12 @@
       --brass: #b8863b;
       --rain: #35577a;
       --rain-soft: rgba(53, 87, 122, 0.22);
+      --sun: #c1502e;
       --rule: #ded8c8;
       --highlight: #ece6d4;
     }
     * { box-sizing: border-box; }
+    html { overflow-x: hidden; }
     body {
       font-family: "Archivo", sans-serif;
       background: var(--paper);
@@ -122,6 +124,20 @@
 
     :focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+    @media (max-width: 600px) {
+      body { padding: 1.25rem 1rem 2.5rem; }
+      .hero { gap: 1rem; padding-bottom: 1.1rem; margin-bottom: 1.25rem; }
+      .hero-icon { font-size: 2.1rem; }
+      .hero-temp { font-size: 2.75rem; }
+      .hero-temp .deg { font-size: 1.4rem; }
+      .hero-stats { gap: 1rem 1.25rem; }
+      #heroUpdated { margin-top: -0.75rem; margin-bottom: 1.25rem; }
+      .week { margin-bottom: 1.25rem; }
+      .day-tab { flex-basis: 84px; padding: 0.65rem 0.4rem; }
+      .panel { padding: 1rem; }
+      .chart-wrap { max-height: 280px; }
+    }
   </style>
 </head>
 <body>
@@ -187,6 +203,19 @@
       });
     }
 
+    // Separate weekday/date formatters, rather than splitting formatDayLabel's
+    // combined string on ", " - not every locale inserts that comma (e.g.
+    // en-GB renders "Sunday 23 Aug"), which left the date row blank.
+    function formatDayOfWeek(key) {
+      const d = new Date(key + "T00:00:00Z");
+      return d.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" });
+    }
+
+    function formatDateShort(key) {
+      const d = new Date(key + "T00:00:00Z");
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+    }
+
     function sparklinePath(values, width, height, pad) {
       const min = Math.min(...values);
       const max = Math.max(...values);
@@ -238,17 +267,25 @@
     function renderHeroPrecip() {
       const todayKey = availableDayKeys[0];
       if (!todayKey) return;
-      const total = precipTotalForDay(todayKey, todayKey);
-      const stat = document.createElement("div");
-      stat.className = "hero-stat";
-      stat.innerHTML = '<div class="label">Precip today</div><div class="value">' + total.toFixed(1) + " mm</div>";
-      heroStatsEl.appendChild(stat);
+      const soFar = precipActualSoFar(todayKey);
+      const expected = precipTotalForDay(todayKey, todayKey);
+
+      const soFarStat = document.createElement("div");
+      soFarStat.className = "hero-stat";
+      soFarStat.innerHTML = '<div class="label">Precip so far</div><div class="value">' + soFar.toFixed(1) + " mm</div>";
+      heroStatsEl.appendChild(soFarStat);
+
+      const expectedStat = document.createElement("div");
+      expectedStat.className = "hero-stat";
+      expectedStat.innerHTML = '<div class="label">Expected today</div><div class="value">' + expected.toFixed(1) + " mm</div>";
+      heroStatsEl.appendChild(expectedStat);
     }
 
     let tempSeries = [];      // [{time, min, median, max}]
     let precipSeries = [];    // [{time, min, median, max}] - hourly, for the chart
     let precipTotalSeries = []; // [{time, min, median, max}] - daily running total, for the day cards
     let windSeries = [];      // [{time, min, median, max}]
+    let radiationSeries = []; // [{time, min, median, max}]
     let availableDayKeys = [];
     let selectedDayIndex = 0; // 0 = today
     let chart = null;
@@ -295,20 +332,24 @@
       return medians.length ? Math.max(...medians) : 0;
     }
 
-    // Today's total mixes what's already known with what's still forecast: sum
-    // the (actual, once spliced) hourly precipitation for hours that have
-    // already happened, then add only the *remaining* forecast total for the
-    // rest of the day - not the whole day's forecast total, which would double
-    // count the elapsed hours, and not a sum of their hourly medians, which is
+    // Sum of the (actual, once spliced) hourly precipitation for today's hours
+    // that have already happened - what's actually fallen, not forecast.
+    function precipActualSoFar(dayKeyValue) {
+      const nowMs = Date.now();
+      return pointsForDay(precipSeries, dayKeyValue)
+        .filter((p) => new Date(p.time).getTime() <= nowMs)
+        .reduce((sum, p) => sum + (p.median ?? 0), 0);
+    }
+
+    // Today's total mixes what's already known with what's still forecast: the
+    // actual so far, plus only the *remaining* forecast total for the rest of
+    // the day - not the whole day's forecast total, which would double count
+    // the elapsed hours, and not a sum of their hourly medians, which is
     // exactly the statistic dayTotal()'s cumulative series exists to avoid.
     function precipTotalForDay(dayKeyValue, todayKey) {
       if (dayKeyValue !== todayKey) return dayTotal(precipTotalSeries, dayKeyValue);
 
       const nowMs = Date.now();
-      const actualSoFar = pointsForDay(precipSeries, dayKeyValue)
-        .filter((p) => new Date(p.time).getTime() <= nowMs)
-        .reduce((sum, p) => sum + (p.median ?? 0), 0);
-
       const totals = pointsForDay(precipTotalSeries, dayKeyValue)
         .filter((p) => p.median !== null && p.median !== undefined);
       const elapsedTotals = totals.filter((p) => new Date(p.time).getTime() <= nowMs);
@@ -316,7 +357,7 @@
       const totalAtEnd = totals.length ? totals[totals.length - 1].median : 0;
       const forecastRemaining = Math.max(0, totalAtEnd - totalAtNow);
 
-      return actualSoFar + forecastRemaining;
+      return precipActualSoFar(dayKeyValue) + forecastRemaining;
     }
 
     function renderWeek() {
@@ -334,13 +375,16 @@
         const rainExpected = precipTotal >= RAIN_ICON_THRESHOLD_MM;
         const windMedians = dayWind.map((p) => p.median).filter((v) => v !== null && v !== undefined);
         const windMax = windMedians.length ? Math.max(...windMedians) : null;
+        const precipLabel = key === todayKey
+          ? precipActualSoFar(key).toFixed(1) + " / " + precipTotal.toFixed(1) + " mm"
+          : precipTotal.toFixed(1) + " mm";
 
         const button = document.createElement("button");
         button.className = "day-tab" + (index === selectedDayIndex ? " active" : "");
         button.innerHTML =
-          '<div class="dow">' + (index === 0 ? "Today" : formatDayLabel(key).split(",")[0].slice(0, 3)) +
+          '<div class="dow">' + (index === 0 ? "Today" : formatDayOfWeek(key).slice(0, 3)) +
           (key === todayKey ? '<span class="today-dot"></span>' : "") + "</div>" +
-          '<div class="date">' + formatDayLabel(key).split(", ")[1] + "</div>" +
+          '<div class="date">' + formatDateShort(key) + "</div>" +
           '<div class="icon">' + (rainExpected ? "🌦️" : "☀️") + "</div>" +
           '<svg width="92" height="26" viewBox="0 0 92 26" style="display:block;margin:0 auto 0.3rem;">' +
           '<path d="' + path + '" fill="none" stroke="#4a6274" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>' +
@@ -349,7 +393,7 @@
           (hi !== null ? '<span class="hi">' + hi.toFixed(0) + "°</span> " : "") +
           (lo !== null ? '<span class="lo">' + lo.toFixed(0) + "°</span>" : "") +
           "</div>" +
-          '<div class="precip mono">' + precipTotal.toFixed(1) + " mm</div>" +
+          '<div class="precip mono">' + precipLabel + "</div>" +
           (windMax !== null ? '<div class="wind mono">' + windMax.toFixed(0) + " km/h</div>" : "");
         button.addEventListener("click", () => {
           selectedDayIndex = index;
@@ -413,6 +457,7 @@
       const tempDay = pointsForDay(tempSeries, dayKeyValue);
       const precipDay = pointsForDay(precipSeries, dayKeyValue);
       const windDay = pointsForDay(windSeries, dayKeyValue);
+      const radiationDay = pointsForDay(radiationSeries, dayKeyValue);
       const labels = tempDay.map((p) => new Date(p.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       const nowMarker = nowPosition(dayKeyValue, availableDayKeys[0], tempDay);
 
@@ -506,6 +551,19 @@
           order: 7,
           datalabels: { display: false },
         },
+        {
+          // Same treatment as wind - median only, own hidden-axis scale.
+          label: "Solar radiation",
+          data: radiationDay.map((p) => p.median),
+          yAxisID: "y3",
+          borderColor: "#c1502e",
+          backgroundColor: "#c1502e",
+          pointRadius: 0,
+          fill: false,
+          tension: 0.3,
+          order: 8,
+          datalabels: { display: false },
+        },
       ];
 
       if (chart) chart.destroy();
@@ -533,6 +591,7 @@
               title: { display: true, text: "mm", color: "#35577a" },
             },
             y2: { beginAtZero: true, display: false },
+            y3: { beginAtZero: true, display: false },
           },
           plugins: {
             legend: { display: false },
@@ -540,7 +599,7 @@
               filter: (item) => !item.dataset.label.includes("min") && !item.dataset.label.includes("range"),
               callbacks: {
                 label: (ctx) => {
-                  const units = { y: "°C", y1: "mm", y2: "km/h" };
+                  const units = { y: "°C", y1: "mm", y2: "km/h", y3: "W/m²" };
                   const unit = units[ctx.dataset.yAxisID] || "";
                   return ctx.dataset.label + ": " + ctx.parsed.y.toFixed(1) + " " + unit;
                 },
@@ -552,26 +611,30 @@
     }
 
     async function init() {
-      const [, temp, precip, precipTotal, wind, actualTemp, actualPrecip, actualWind] = await Promise.all([
+      const [, temp, precip, precipTotal, wind, radiation, actualTemp, actualPrecip, actualWind, actualRadiation] = await Promise.all([
         loadCurrent(),
         loadSeries("temperature_2m"),
         loadSeries("precipitation"),
         loadSeries("precipitation_total"),
         loadSeries("wind_speed_10m"),
+        loadSeries("shortwave_radiation"),
         loadActual("temperature_2m"),
         loadActual("precipitation"),
         loadActual("wind_speed_10m"),
+        loadActual("shortwave_radiation"),
       ]);
       tempSeries = temp;
       precipSeries = precip;
       precipTotalSeries = precipTotal;
       windSeries = wind;
+      radiationSeries = radiation;
 
       // Today's already-elapsed hours have a real reading now - show that
       // instead of what was forecast for them before the fact.
       spliceActuals(tempSeries, actualTemp);
       spliceActuals(precipSeries, actualPrecip);
       spliceActuals(windSeries, actualWind);
+      spliceActuals(radiationSeries, actualRadiation);
 
       const keys = new Set([...temp, ...precip, ...wind].map((p) => dayKey(p.time)));
       availableDayKeys = Array.from(keys).sort();

@@ -159,6 +159,7 @@ def test_fetch_forecast_requests_the_ensemble_api_with_the_icon_model(client):
     assert "temperature_2m" in params["hourly"]
     assert "precipitation" in params["hourly"]
     assert "wind_speed_10m" in params["hourly"]
+    assert "shortwave_radiation" in params["hourly"]
 
     assert readings[0].values == {
         "temperature_2m_min": 15.0,

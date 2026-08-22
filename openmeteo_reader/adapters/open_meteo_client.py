@@ -22,7 +22,7 @@ ENSEMBLE_MODEL = "icon_seamless"
 # The variables people actually act on day-to-day ("how warm", "will it rain", "how
 # windy") - not the full curated actuals set, which would be far more members/writes
 # for spread bands most people won't look at.
-ENSEMBLE_VARIABLES = ["temperature_2m", "precipitation", "wind_speed_10m"]
+ENSEMBLE_VARIABLES = ["temperature_2m", "precipitation", "wind_speed_10m", "shortwave_radiation"]
 
 # The Forecast API's rolling window: this is what revises for up to ~3h after the
 # fact as observations land, so it's what feeds the hourly correction job.

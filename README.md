@@ -15,7 +15,7 @@ Three data sources are used, for different purposes:
 - **Ensemble API** (DWD ICON, `icon_seamless`) - the forward-looking forecast, today
   through +7 days. 40 model members per variable are collapsed into min/median/max
   before storage, not kept raw - the app only needs the spread, not per-member
-  analysis. Covers temperature and precipitation only.
+  analysis. Covers temperature, precipitation, wind speed, and shortwave radiation.
 
 See `../CONTEXT.md` ("Weather domain") for the location, buckets, and schema.
 
@@ -87,7 +87,8 @@ written with an inconsistent type across points.
 
 **Forecast** - bucket `forecast` (configurable via `INFLUX_FORECAST_BUCKET`), same
 measurement/tag. Fields are `<variable>_min`, `<variable>_median`, `<variable>_max`
-for `temperature_2m`, `precipitation`, and `wind_speed_10m` - the ensemble spread,
+for `temperature_2m`, `precipitation`, `wind_speed_10m`, and `shortwave_radiation` -
+the ensemble spread,
 not raw member values. `precipitation` additionally gets `precipitation_total_min/
 median/max`: each member's own running total for the UTC day, reduced to
 min/median/max, used for the day's expected precipitation total. Summing the
