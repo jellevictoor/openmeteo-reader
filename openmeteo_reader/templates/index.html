@@ -186,10 +186,6 @@
       </div>
       <div class="mini-charts">
         <div class="mini-chart">
-          <p class="mini-chart-label">Wind</p>
-          <div class="mini-chart-canvas"><canvas id="windChart"></canvas></div>
-        </div>
-        <div class="mini-chart">
           <p class="mini-chart-label">Solar radiation</p>
           <div class="mini-chart-canvas"><canvas id="radiationChart"></canvas></div>
         </div>
@@ -312,7 +308,6 @@
     let availableDayKeys = [];
     let selectedDayIndex = 0; // 0 = today
     let chart = null;
-    let windChart = null;
     let radiationChart = null;
 
     async function loadSeries(variable) {
@@ -595,13 +590,16 @@
         },
       });
 
-      renderMiniCharts(pointsForDay(windSeries, dayKeyValue), pointsForDay(radiationSeries, dayKeyValue));
+      renderMiniCharts(pointsForDay(radiationSeries, dayKeyValue));
     }
 
-    // Wind and radiation don't earn axis-parity with temperature/precipitation
-    // (the day cards already show wind max; radiation has no other home) - a
-    // small single-series sparkline each, not a third and fourth line crammed
-    // onto hidden axes nobody could calibrate.
+    // Radiation doesn't earn axis-parity with temperature/precipitation (it
+    // has no other home on the page) - a small single-series sparkline, not
+    // a third line crammed onto a hidden axis nobody could calibrate. Wind
+    // got the same treatment initially but was cut: median-only with no
+    // gusts or direction, its hourly shape was just wobble - the day cards'
+    // wind max plus the hero's current speed/direction already answer what a
+    // household actually needs from wind.
     function miniChartOptions(unit, yScale) {
       return {
         maintainAspectRatio: false,
@@ -622,24 +620,7 @@
       };
     }
 
-    function renderMiniCharts(windDay, radiationDay) {
-      if (windChart) windChart.destroy();
-      windChart = new Chart(document.getElementById("windChart"), {
-        type: "line",
-        data: {
-          labels: windDay.map((p) => p.time),
-          datasets: [{
-            data: windDay.map((p) => p.median),
-            borderColor: "#b8863b",
-            backgroundColor: "#b8863b",
-            pointRadius: 0,
-            fill: false,
-            tension: 0.3,
-          }],
-        },
-        options: miniChartOptions("km/h", { beginAtZero: true }),
-      });
-
+    function renderMiniCharts(radiationDay) {
       if (radiationChart) radiationChart.destroy();
       radiationChart = new Chart(document.getElementById("radiationChart"), {
         type: "line",
