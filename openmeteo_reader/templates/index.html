@@ -353,7 +353,11 @@
         if (peakMedian >= RAIN_THRESHOLD_MM) {
           sentence = "Rain likely " + period + ".";
         } else if (peakMax >= RAIN_THRESHOLD_MM) {
-          sentence = "Rain possible " + period + " - could go either way.";
+          // Not "could go either way" - that names the uncertainty without
+          // saying what to do about it, which tested as a shrug, not an
+          // answer. Same underlying signal (dry median, wet max), said as a
+          // decision instead.
+          sentence = "Rain possible " + period + " - bring an umbrella just in case.";
         } else {
           sentence = "Rain unlikely for the rest of today.";
         }
