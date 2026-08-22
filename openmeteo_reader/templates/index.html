@@ -58,10 +58,15 @@
     .hero-temp .deg { font-size: 2rem; color: var(--ink-soft); }
     .hero-stats {
       display: flex;
-      gap: 1.75rem;
+      gap: 1.25rem;
       flex-wrap: wrap;
       padding-bottom: 0.4rem;
     }
+    .hero-stat {
+      border-left: 1px solid var(--rule);
+      padding-left: 1.25rem;
+    }
+    .hero-stat:first-child { border-left: none; padding-left: 0; }
     .hero-stat .label {
       font-size: 0.7rem;
       letter-spacing: 0.06em;
@@ -69,7 +74,7 @@
       color: var(--ink-soft);
       margin-bottom: 0.15rem;
     }
-    .hero-stat .value { font-size: 1rem; font-weight: 500; }
+    .hero-stat .value { font-size: 0.9rem; font-weight: 500; }
     #heroUpdated { color: var(--ink-soft); font-size: 0.8rem; margin-top: -1.25rem; margin-bottom: 1.75rem; }
 
     .week {
@@ -132,6 +137,11 @@
       .hero-temp { font-size: 2.75rem; }
       .hero-temp .deg { font-size: 1.4rem; }
       .hero-stats { gap: 1rem 1.25rem; }
+      /* A left divider only reads as "separator" on one unbroken row - once
+         hero-stats wraps to multiple lines on a narrow screen, every wrapped
+         line's first item would show a stray leading bar. Gap alone separates
+         items fine here. */
+      .hero-stat { border-left: none; padding-left: 0; }
       #heroUpdated { margin-top: -0.75rem; margin-bottom: 1.25rem; }
       .week { margin-bottom: 1.25rem; }
       .day-tab { flex-basis: 84px; padding: 0.65rem 0.4rem; }
@@ -270,15 +280,10 @@
       const soFar = precipActualSoFar(todayKey);
       const expected = precipTotalForDay(todayKey, todayKey);
 
-      const soFarStat = document.createElement("div");
-      soFarStat.className = "hero-stat";
-      soFarStat.innerHTML = '<div class="label">Precip so far</div><div class="value">' + soFar.toFixed(1) + " mm</div>";
-      heroStatsEl.appendChild(soFarStat);
-
-      const expectedStat = document.createElement("div");
-      expectedStat.className = "hero-stat";
-      expectedStat.innerHTML = '<div class="label">Expected today</div><div class="value">' + expected.toFixed(1) + " mm</div>";
-      heroStatsEl.appendChild(expectedStat);
+      const precipStat = document.createElement("div");
+      precipStat.className = "hero-stat";
+      precipStat.innerHTML = '<div class="label">Precip</div><div class="value">' + soFar.toFixed(1) + " of " + expected.toFixed(1) + " mm</div>";
+      heroStatsEl.appendChild(precipStat);
     }
 
     let tempSeries = [];      // [{time, min, median, max}]
@@ -376,7 +381,7 @@
         const windMedians = dayWind.map((p) => p.median).filter((v) => v !== null && v !== undefined);
         const windMax = windMedians.length ? Math.max(...windMedians) : null;
         const precipLabel = key === todayKey
-          ? precipActualSoFar(key).toFixed(1) + " / " + precipTotal.toFixed(1) + " mm"
+          ? precipActualSoFar(key).toFixed(1) + " of " + precipTotal.toFixed(1) + " mm"
           : precipTotal.toFixed(1) + " mm";
 
         const button = document.createElement("button");
