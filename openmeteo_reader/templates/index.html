@@ -107,7 +107,6 @@
       color: var(--ink-soft);
     }
     .day-tab .date { font-size: 0.7rem; color: var(--ink-soft); margin-bottom: 0.3rem; }
-    .day-tab .icon { font-size: 1.3rem; margin-bottom: 0.3rem; }
     .day-tab .range { font-size: 0.78rem; }
     .day-tab .range .hi { font-weight: 600; }
     .day-tab .range .lo { color: var(--ink-soft); }
@@ -126,6 +125,16 @@
     }
     .panel-head { margin-bottom: 1rem; }
     .chart-wrap { max-height: 380px; }
+    .mini-charts { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1.25rem; }
+    .mini-chart { flex: 1 1 200px; }
+    .mini-chart-canvas { height: 60px; position: relative; }
+    .mini-chart-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      margin: 0 0 0.35rem 0;
+    }
 
     :focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -175,6 +184,16 @@
       <div class="chart-wrap">
         <canvas id="chart" height="120"></canvas>
       </div>
+      <div class="mini-charts">
+        <div class="mini-chart">
+          <p class="mini-chart-label">Wind</p>
+          <div class="mini-chart-canvas"><canvas id="windChart"></canvas></div>
+        </div>
+        <div class="mini-chart">
+          <p class="mini-chart-label">Solar radiation</p>
+          <div class="mini-chart-canvas"><canvas id="radiationChart"></canvas></div>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -182,7 +201,6 @@
     Chart.register(ChartDataLabels);
 
     const HORIZON_DAYS = 8;
-    const RAIN_ICON_THRESHOLD_MM = 0.2;
     const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
       "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
 
@@ -294,6 +312,8 @@
     let availableDayKeys = [];
     let selectedDayIndex = 0; // 0 = today
     let chart = null;
+    let windChart = null;
+    let radiationChart = null;
 
     async function loadSeries(variable) {
       const response = await fetch("/api/forecast/series?variable=" + variable + "&days=" + HORIZON_DAYS);
@@ -377,12 +397,8 @@
         const lo = medians.length ? Math.min(...medians) : null;
         const path = medians.length > 1 ? sparklinePath(medians, 92, 26, 4) : "";
         const precipTotal = precipTotalForDay(key, todayKey);
-        const rainExpected = precipTotal >= RAIN_ICON_THRESHOLD_MM;
         const windMedians = dayWind.map((p) => p.median).filter((v) => v !== null && v !== undefined);
         const windMax = windMedians.length ? Math.max(...windMedians) : null;
-        const precipLabel = key === todayKey
-          ? precipActualSoFar(key).toFixed(1) + " of " + precipTotal.toFixed(1) + " mm"
-          : precipTotal.toFixed(1) + " mm";
 
         const button = document.createElement("button");
         button.className = "day-tab" + (index === selectedDayIndex ? " active" : "");
@@ -390,15 +406,14 @@
           '<div class="dow">' + (index === 0 ? "Today" : formatDayOfWeek(key).slice(0, 3)) +
           (key === todayKey ? '<span class="today-dot"></span>' : "") + "</div>" +
           '<div class="date">' + formatDateShort(key) + "</div>" +
-          '<div class="icon">' + (rainExpected ? "🌦️" : "☀️") + "</div>" +
-          '<svg width="92" height="26" viewBox="0 0 92 26" style="display:block;margin:0 auto 0.3rem;">' +
+          '<svg width="92" height="26" viewBox="0 0 92 26" style="display:block;margin:0.5rem auto 0.3rem;">' +
           '<path d="' + path + '" fill="none" stroke="#4a6274" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>' +
           "</svg>" +
           '<div class="range mono">' +
           (hi !== null ? '<span class="hi">' + hi.toFixed(0) + "°</span> " : "") +
           (lo !== null ? '<span class="lo">' + lo.toFixed(0) + "°</span>" : "") +
           "</div>" +
-          '<div class="precip mono">' + precipLabel + "</div>" +
+          '<div class="precip mono">' + precipTotal.toFixed(1) + " mm</div>" +
           (windMax !== null ? '<div class="wind mono">' + windMax.toFixed(0) + " km/h</div>" : "");
         button.addEventListener("click", () => {
           selectedDayIndex = index;
@@ -461,8 +476,6 @@
 
       const tempDay = pointsForDay(tempSeries, dayKeyValue);
       const precipDay = pointsForDay(precipSeries, dayKeyValue);
-      const windDay = pointsForDay(windSeries, dayKeyValue);
-      const radiationDay = pointsForDay(radiationSeries, dayKeyValue);
       const labels = tempDay.map((p) => new Date(p.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       const nowMarker = nowPosition(dayKeyValue, availableDayKeys[0], tempDay);
 
@@ -490,6 +503,9 @@
           datalabels: { display: false },
         },
         {
+          // No per-point labels - 24 printed values fighting the line, band,
+          // and bars was the single biggest source of clutter here, and the
+          // tooltip (hover/tap) already gives the exact reading on demand.
           label: "Temperature",
           data: tempDay.map((p) => p.median),
           yAxisID: "y",
@@ -501,12 +517,7 @@
           fill: false,
           tension: 0.3,
           order: 1,
-          datalabels: {
-            color: "#6b7280",
-            font: { size: 10 },
-            align: "top",
-            formatter: (v) => (v === null || v === undefined ? "" : v.toFixed(1) + "°"),
-          },
+          datalabels: { display: false },
         },
         {
           label: "Precipitation min",
@@ -541,38 +552,6 @@
           order: 2,
           datalabels: { display: false },
         },
-        {
-          // No band for wind - just the median, on its own hidden-axis scale so
-          // it doesn't compete visually with temperature's or precipitation's.
-          label: "Wind speed",
-          data: windDay.map((p) => p.median),
-          yAxisID: "y2",
-          borderColor: "#b8863b",
-          backgroundColor: "#b8863b",
-          borderDash: [4, 3],
-          pointRadius: 0,
-          fill: false,
-          tension: 0.3,
-          order: 7,
-          datalabels: { display: false },
-        },
-        {
-          // Thin, muted, and drawn on a fixed absolute scale (not per-day
-          // relative) so a hazy day's radiation reads visibly lower than a
-          // clear day's, instead of both stretching to fill the same band.
-          label: "Solar radiation",
-          data: radiationDay.map((p) => p.median),
-          yAxisID: "y3",
-          borderColor: "rgba(193, 80, 46, 0.55)",
-          backgroundColor: "rgba(193, 80, 46, 0.55)",
-          borderWidth: 1,
-          borderDash: [1, 3],
-          pointRadius: 0,
-          fill: false,
-          tension: 0.3,
-          order: 8,
-          datalabels: { display: false },
-        },
       ];
 
       if (chart) chart.destroy();
@@ -599,11 +578,6 @@
               suggestedMax: 5,
               title: { display: true, text: "mm", color: "#35577a" },
             },
-            y2: { beginAtZero: true, display: false },
-            // Fixed 0-1000 W/m2 rather than per-day auto-scaling, so intensity
-            // is comparable across days - a hazy day's line sits visibly lower
-            // than a clear day's instead of both being stretched to fill the axis.
-            y3: { min: 0, max: 1000, display: false },
           },
           plugins: {
             legend: { display: false },
@@ -611,7 +585,7 @@
               filter: (item) => !item.dataset.label.includes("min") && !item.dataset.label.includes("range"),
               callbacks: {
                 label: (ctx) => {
-                  const units = { y: "°C", y1: "mm", y2: "km/h", y3: "W/m²" };
+                  const units = { y: "°C", y1: "mm" };
                   const unit = units[ctx.dataset.yAxisID] || "";
                   return ctx.dataset.label + ": " + ctx.parsed.y.toFixed(1) + " " + unit;
                 },
@@ -619,6 +593,71 @@
             },
           },
         },
+      });
+
+      renderMiniCharts(pointsForDay(windSeries, dayKeyValue), pointsForDay(radiationSeries, dayKeyValue));
+    }
+
+    // Wind and radiation don't earn axis-parity with temperature/precipitation
+    // (the day cards already show wind max; radiation has no other home) - a
+    // small single-series sparkline each, not a third and fourth line crammed
+    // onto hidden axes nobody could calibrate.
+    function miniChartOptions(unit, yScale) {
+      return {
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        scales: {
+          x: { display: false },
+          y: Object.assign({ ticks: { color: "#6b7280", font: { size: 9 }, maxTicksLimit: 3 }, grid: { color: "#ded8c8" } }, yScale),
+        },
+        plugins: {
+          legend: { display: false },
+          datalabels: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ctx.parsed.y.toFixed(1) + " " + unit,
+            },
+          },
+        },
+      };
+    }
+
+    function renderMiniCharts(windDay, radiationDay) {
+      if (windChart) windChart.destroy();
+      windChart = new Chart(document.getElementById("windChart"), {
+        type: "line",
+        data: {
+          labels: windDay.map((p) => p.time),
+          datasets: [{
+            data: windDay.map((p) => p.median),
+            borderColor: "#b8863b",
+            backgroundColor: "#b8863b",
+            pointRadius: 0,
+            fill: false,
+            tension: 0.3,
+          }],
+        },
+        options: miniChartOptions("km/h", { beginAtZero: true }),
+      });
+
+      if (radiationChart) radiationChart.destroy();
+      radiationChart = new Chart(document.getElementById("radiationChart"), {
+        type: "line",
+        data: {
+          labels: radiationDay.map((p) => p.time),
+          datasets: [{
+            data: radiationDay.map((p) => p.median),
+            borderColor: "rgba(193, 80, 46, 0.75)",
+            backgroundColor: "rgba(193, 80, 46, 0.75)",
+            pointRadius: 0,
+            fill: false,
+            tension: 0.3,
+          }],
+        },
+        // Fixed 0-1000 W/m2 rather than per-day auto-scaling, so intensity is
+        // comparable across days - a hazy day's line sits visibly lower than a
+        // clear day's, instead of both being stretched to fill the axis.
+        options: miniChartOptions("W/m²", { min: 0, max: 1000 }),
       });
     }
 
