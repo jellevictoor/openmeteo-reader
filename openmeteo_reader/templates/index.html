@@ -450,6 +450,35 @@
       };
     }
 
+    // Ambient daylight tint, not a competing line: one soft vertical band per
+    // hour behind the grid/bars/lines (beforeDraw, so everything else paints
+    // over it), opacity keyed to that hour's share of the day's peak radiation.
+    // Fades to nothing overnight rather than sitting on the chart as a flat
+    // zero line needing an explanation.
+    function radiationShadePlugin(radiationDay) {
+      const medians = radiationDay.map((p) => Math.max(0, p.median ?? 0));
+      const peak = Math.max(1, ...medians);
+      return {
+        id: "radiationShade",
+        beforeDraw(chartInstance) {
+          if (!medians.length) return;
+          const scale = chartInstance.scales.x;
+          const { top, bottom, left, right } = chartInstance.chartArea;
+          const ctx = chartInstance.ctx;
+          ctx.save();
+          medians.forEach((value, index) => {
+            const alpha = (value / peak) * 0.14;
+            if (alpha <= 0.005) return;
+            const x0 = index === 0 ? left : (scale.getPixelForValue(index - 1) + scale.getPixelForValue(index)) / 2;
+            const x1 = index === medians.length - 1 ? right : (scale.getPixelForValue(index) + scale.getPixelForValue(index + 1)) / 2;
+            ctx.fillStyle = "rgba(193, 80, 46, " + alpha.toFixed(3) + ")";
+            ctx.fillRect(x0, top, x1 - x0, bottom - top);
+          });
+          ctx.restore();
+        },
+      };
+    }
+
     function renderChart() {
       const dayKeyValue = availableDayKeys[selectedDayIndex];
       chartDayLabelEl.textContent = "Hourly forecast · " + (dayKeyValue ? formatDayLabel(dayKeyValue) : "–");
@@ -551,26 +580,13 @@
           order: 7,
           datalabels: { display: false },
         },
-        {
-          // Same treatment as wind - median only, own hidden-axis scale.
-          label: "Solar radiation",
-          data: radiationDay.map((p) => p.median),
-          yAxisID: "y3",
-          borderColor: "#c1502e",
-          backgroundColor: "#c1502e",
-          pointRadius: 0,
-          fill: false,
-          tension: 0.3,
-          order: 8,
-          datalabels: { display: false },
-        },
       ];
 
       if (chart) chart.destroy();
       chart = new Chart(document.getElementById("chart"), {
         type: "line",
         data: { labels, datasets },
-        plugins: [nowLinePlugin(nowMarker)],
+        plugins: [radiationShadePlugin(radiationDay), nowLinePlugin(nowMarker)],
         options: {
           interaction: { mode: "index", intersect: false },
           scales: {
@@ -591,7 +607,6 @@
               title: { display: true, text: "mm", color: "#35577a" },
             },
             y2: { beginAtZero: true, display: false },
-            y3: { beginAtZero: true, display: false },
           },
           plugins: {
             legend: { display: false },
@@ -599,9 +614,14 @@
               filter: (item) => !item.dataset.label.includes("min") && !item.dataset.label.includes("range"),
               callbacks: {
                 label: (ctx) => {
-                  const units = { y: "°C", y1: "mm", y2: "km/h", y3: "W/m²" };
+                  const units = { y: "°C", y1: "mm", y2: "km/h" };
                   const unit = units[ctx.dataset.yAxisID] || "";
                   return ctx.dataset.label + ": " + ctx.parsed.y.toFixed(1) + " " + unit;
+                },
+                footer: (items) => {
+                  const point = radiationDay[items[0]?.dataIndex];
+                  if (!point || point.median === null || point.median === undefined) return "";
+                  return "Sun: " + point.median.toFixed(0) + " W/m²";
                 },
               },
             },
