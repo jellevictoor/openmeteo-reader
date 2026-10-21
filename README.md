@@ -12,10 +12,14 @@ Three data sources are used, for different purposes:
   hour.
 - **Historical Weather API** (ERA5 reanalysis) - one-off backfill of actuals for
   anything older than the Forecast API's rolling window covers.
-- **Ensemble API** (DWD ICON, `icon_seamless`) - the forward-looking forecast, today
-  through +7 days. 40 model members per variable are collapsed into min/median/max
+- **Ensemble API** (DWD ICON `icon_seamless` and ECMWF IFS `ecmwf_ifs025`, pooled)
+  - the forward-looking forecast, today through +7 days. The 40 ICON and 51 ECMWF
+  members are treated as one 91-member ensemble and collapsed into min/median/max
   before storage, not kept raw - the app only needs the spread, not per-member
-  analysis. Covers temperature, precipitation, wind speed, and shortwave radiation.
+  analysis. Pooling two independent model families keeps the median where they
+  agree instead of following one family's timing of a front. Covers temperature,
+  precipitation, wind speed, and shortwave radiation. ICON ends after ~7.5 days, so
+  the last hours of the horizon are ECMWF only.
 
 See `../CONTEXT.md` ("Weather domain") for the location, buckets, and schema.
 
@@ -90,12 +94,20 @@ measurement/tag. Fields are `<variable>_min`, `<variable>_median`, `<variable>_m
 for `temperature_2m`, `precipitation`, `wind_speed_10m`, and `shortwave_radiation` -
 the ensemble spread,
 not raw member values. `precipitation` additionally gets `precipitation_total_min/
-median/max`: each member's own running total for the UTC day, reduced to
-min/median/max, used for the day's expected precipitation total. Summing the
+median/max`: each member's own running total for the local day (Home's time zone,
+reset at local midnight), reduced to min/median/max, used for the day's expected
+precipitation total, and `precipitation_total_probability`: the share of members,
+in percent, whose total so far has reached 1 mm - the chance of a wet day. Summing the
 hourly `precipitation_median` values instead would misstate it - see the comment
 on `CUMULATIVE_VARIABLES` in `domain/ensemble_response.py`. Points are future-dated
 and get fully overwritten on every `forecast` run (models update; they don't
-accumulate like actuals).
+accumulate like actuals). Timestamps are stored in UTC; the importer fetches
+yesterday too, so today's running total starts at local midnight, and drops
+everything before it.
+
+`GET /api/forecast/daily-precipitation` returns one entry per local day - the end
+of day `min`/`median`/`max` total and the `probability` of at least 1 mm - for
+consumers like the kitchen e-paper display.
 
 ## Deployment (Core node, `.5`)
 

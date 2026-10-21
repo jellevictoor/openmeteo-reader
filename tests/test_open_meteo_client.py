@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 import httpx
 import pytest
@@ -17,10 +17,14 @@ def sleeps():
     return []
 
 
+# 10:00 local on 20 Aug 2026 (Belgian summer time, UTC+2)
+NOW = datetime(2026, 8, 20, 8, 0, tzinfo=UTC)
+
+
 @pytest.fixture
 def client(sleeps):
     return OpenMeteoClient(
-        latitude=50.995, longitude=3.213, location="home", sleep=sleeps.append
+        latitude=50.995, longitude=3.213, location="home", sleep=sleeps.append, now=lambda: NOW
     )
 
 
@@ -133,15 +137,15 @@ def test_fetch_recent_does_not_retry_on_a_non_429_error(client, sleeps):
 
 
 @respx.mock
-def test_fetch_forecast_requests_the_ensemble_api_with_the_icon_model(client):
+def test_fetch_forecast_pools_the_icon_and_ecmwf_ensembles(client):
     route = respx.get(ENSEMBLE_URL).mock(
         return_value=httpx.Response(
             200,
             json={
                 "hourly": {
                     "time": ["2026-08-20T00:00"],
-                    "temperature_2m_member01": [15.0],
-                    "temperature_2m_member02": [17.0],
+                    "temperature_2m_member01_icon_seamless_eps": [15.0],
+                    "temperature_2m_member01_ecmwf_ifs025_ensemble": [17.0],
                 }
             },
         )
@@ -153,7 +157,7 @@ def test_fetch_forecast_requests_the_ensemble_api_with_the_icon_model(client):
     params = httpx.QueryParams(request.url.query)
     assert params["latitude"] == "50.995"
     assert params["longitude"] == "3.213"
-    assert params["models"] == "icon_seamless"
+    assert params["models"] == "icon_seamless,ecmwf_ifs025"
     assert params["forecast_days"] == "8"
     assert params["timezone"] == "UTC"
     assert "temperature_2m" in params["hourly"]
@@ -167,3 +171,30 @@ def test_fetch_forecast_requests_the_ensemble_api_with_the_icon_model(client):
         "temperature_2m_max": 17.0,
     }
     assert readings[0].location == "home"
+
+
+@respx.mock
+def test_fetch_forecast_starts_at_local_midnight_with_a_complete_day_total(client):
+    # Local midnight on 20 Aug is 22:00 UTC on the 19th. Asking for yesterday too
+    # lets today's running total start there, then everything earlier is dropped.
+    route = respx.get(ENSEMBLE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "hourly": {
+                    "time": ["2026-08-19T21:00", "2026-08-19T22:00", "2026-08-19T23:00"],
+                    "precipitation_member01": [4.0, 1.0, 2.0],
+                }
+            },
+        )
+    )
+
+    readings = client.fetch_forecast(days=8)
+
+    params = httpx.QueryParams(route.calls.last.request.url.query)
+    assert params["past_days"] == "1"
+    assert [r.timestamp for r in readings] == [
+        datetime(2026, 8, 19, 22, 0, tzinfo=UTC),
+        datetime(2026, 8, 19, 23, 0, tzinfo=UTC),
+    ]
+    assert readings[1].values["precipitation_total_median"] == 3.0

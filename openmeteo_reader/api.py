@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 
+from openmeteo_reader.domain.models import HOME_TIMEZONE
 from openmeteo_reader.ports.weather_query_repository import WeatherQueryRepository
 
 # Global repository instances, set by main.py at startup - mirrors sdm-modbus-reader's
@@ -63,13 +64,18 @@ async def get_series(variable: str, hours: int = 72):
     return [{"time": time.isoformat(), "value": value} for time, value in points]
 
 
+def local_midnight_today() -> datetime:
+    """The start of today in Home's local time - where a forecast day begins"""
+    return datetime.now(HOME_TIMEZONE).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 @app.get("/api/forecast/series")
 async def get_forecast_series(variable: str, days: int = 8):
     """A variable's min/median/max ensemble spread for the next `days` days"""
     if _forecast_repository is None:
         raise HTTPException(status_code=503, detail="Forecast repository not initialized")
 
-    since = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    since = local_midnight_today()
     until = since + timedelta(days=days)
 
     stats = {}
@@ -86,6 +92,35 @@ async def get_forecast_series(variable: str, days: int = 8):
         }
         for time in times
     ]
+
+
+@app.get("/api/forecast/daily-precipitation")
+async def get_daily_precipitation(days: int = 8):
+    """
+    One entry per local day: the day's expected rain total (min/median/max across
+    the pooled ensemble) and the chance, in percent, of at least 1 mm.
+
+    The running total resets at local midnight, so the day's last hour holds the
+    day's total.
+    """
+    if _forecast_repository is None:
+        raise HTTPException(status_code=503, detail="Forecast repository not initialized")
+
+    since = local_midnight_today()
+    until = since + timedelta(days=days)
+    fields = {
+        "min": "precipitation_total_min",
+        "median": "precipitation_total_median",
+        "max": "precipitation_total_max",
+        "probability": "precipitation_total_probability",
+    }
+
+    days_out: dict[str, dict] = {}
+    for key, field in fields.items():
+        for time, value in sorted(_forecast_repository.series(field, since, until)):
+            day = time.astimezone(HOME_TIMEZONE).date().isoformat()
+            days_out.setdefault(day, {"date": day})[key] = value
+    return [days_out[day] for day in sorted(days_out)]
 
 
 @app.get("/")

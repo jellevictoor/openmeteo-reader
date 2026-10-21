@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 
 from openmeteo_reader import api
-from openmeteo_reader.domain.models import WeatherReading
+from openmeteo_reader.domain.models import HOME_TIMEZONE, WeatherReading
 
 
 class FakeQueryRepository:
@@ -146,3 +146,48 @@ def test_forecast_series_combines_min_median_max_by_time():
         "temperature_2m_median",
         "temperature_2m_max",
     }
+
+
+def test_forecast_series_starts_at_local_midnight():
+    forecast_repository = FakeQueryRepository()
+    client = make_client(FakeQueryRepository(), forecast_repository=forecast_repository)
+
+    client.get("/api/forecast/series", params={"variable": "temperature_2m"})
+
+    since = forecast_repository.series_calls[0][1]
+    local = since.astimezone(HOME_TIMEZONE)
+    assert (local.hour, local.minute) == (0, 0)
+    assert local.date() == datetime.now(HOME_TIMEZONE).date()
+
+
+def test_daily_precipitation_returns_each_local_days_end_of_day_total_and_chance():
+    # Totals run up through the local day; the last hour of each day holds that
+    # day's total. 21:00 UTC is 23:00 local (the end of the 20th), 22:00 UTC is
+    # 00:00 local on the 21st.
+    end_of_20th = datetime(2026, 8, 20, 21, tzinfo=UTC)
+    start_of_21st = datetime(2026, 8, 20, 22, tzinfo=UTC)
+    end_of_21st = datetime(2026, 8, 21, 21, tzinfo=UTC)
+    early_20th = datetime(2026, 8, 19, 22, tzinfo=UTC)
+    forecast_repository = FakeQueryRepository(
+        series_by_variable={
+            "precipitation_total_min": [(early_20th, 0.0), (end_of_20th, 2.0), (start_of_21st, 0.0), (end_of_21st, 0.0)],
+            "precipitation_total_median": [(early_20th, 0.0), (end_of_20th, 6.0), (start_of_21st, 0.1), (end_of_21st, 0.4)],
+            "precipitation_total_max": [(early_20th, 0.5), (end_of_20th, 14.0), (start_of_21st, 0.3), (end_of_21st, 3.0)],
+            "precipitation_total_probability": [(early_20th, 0.0), (end_of_20th, 92.0), (start_of_21st, 0.0), (end_of_21st, 20.0)],
+        }
+    )
+    client = make_client(FakeQueryRepository(), forecast_repository=forecast_repository)
+
+    response = client.get("/api/forecast/daily-precipitation")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"date": "2026-08-20", "min": 2.0, "median": 6.0, "max": 14.0, "probability": 92.0},
+        {"date": "2026-08-21", "min": 0.0, "median": 0.4, "max": 3.0, "probability": 20.0},
+    ]
+
+
+def test_daily_precipitation_returns_503_when_forecast_repository_is_not_wired_up():
+    client = make_client(FakeQueryRepository(), forecast_repository=None)
+
+    assert client.get("/api/forecast/daily-precipitation").status_code == 503
