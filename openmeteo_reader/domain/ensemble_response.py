@@ -15,6 +15,11 @@ from openmeteo_reader.domain.models import WeatherReading
 # correlation within one member's realization that a per-hour median discards.
 CUMULATIVE_VARIABLES = {"precipitation"}
 
+# Quantities that can't physically go below zero. ECMWF members occasionally
+# report -0.1 mm for an hour - a rounding artifact of de-accumulating a running
+# sum - which would otherwise drag the minimum and a day's total below zero.
+NON_NEGATIVE_VARIABLES = {"precipitation"}
+
 # A day with less than this much rain in total reads as dry, so the chance of a
 # wet day is the share of members whose total reaches it.
 WET_DAY_MM = 1.0
@@ -30,6 +35,14 @@ def member_columns(hourly: dict, variable: str) -> list[str]:
     members of all models into one ensemble, whatever the suffix looks like.
     """
     return [c for c in hourly if c == variable or c.startswith(variable + "_")]
+
+
+def member_value(hourly: dict, column: str, index: int, variable: str) -> float | None:
+    """One member's value for an hour, with physically impossible negatives floored at zero"""
+    value = hourly[column][index]
+    if value is None or variable not in NON_NEGATIVE_VARIABLES:
+        return value
+    return max(0.0, value)
 
 
 def parse_ensemble_readings(
@@ -70,7 +83,11 @@ def parse_ensemble_readings(
 
         values = {}
         for variable, member_cols in columns.items():
-            members = [hourly[c][index] for c in member_cols if hourly[c][index] is not None]
+            members = [
+                member_value(hourly, c, index, variable)
+                for c in member_cols
+                if hourly[c][index] is not None
+            ]
             if not members:
                 continue
             values[f"{variable}_min"] = min(members)
@@ -80,7 +97,7 @@ def parse_ensemble_readings(
             if variable in CUMULATIVE_VARIABLES:
                 totals = []
                 for column in member_cols:
-                    value = hourly[column][index]
+                    value = member_value(hourly, column, index, variable)
                     running_totals[column] = running_totals.get(column, 0.0) + (
                         value if value is not None else 0.0
                     )

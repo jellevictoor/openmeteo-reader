@@ -188,3 +188,25 @@ def test_total_probability_is_the_share_of_members_with_at_least_1mm_so_far_toda
 
     assert readings[0].values["precipitation_total_probability"] == 25.0
     assert readings[1].values["precipitation_total_probability"] == 50.0
+
+
+def test_negative_precipitation_from_a_member_counts_as_zero():
+    # ECMWF members occasionally report -0.1 mm for an hour: a rounding artifact
+    # of de-accumulating a running sum. Rain can't be negative, so it counts as
+    # dry - otherwise it drags the minimum and the day's total below zero.
+    raw = {
+        "hourly": {
+            "time": ["2026-08-20T00:00", "2026-08-20T01:00"],
+            "precipitation_member01": [-0.1, -0.1],
+            "precipitation_member02": [0.4, 0.0],
+            "temperature_2m_member01": [-3.0, -4.0],
+        }
+    }
+
+    readings = parse_ensemble_readings(raw, location="home", variables=VARIABLES, day_zone=UTC)
+
+    assert readings[0].values["precipitation_min"] == 0.0
+    assert readings[1].values["precipitation_total_min"] == 0.0
+    assert readings[1].values["precipitation_total_median"] == 0.2
+    # temperatures below zero are real
+    assert readings[0].values["temperature_2m_min"] == -3.0
