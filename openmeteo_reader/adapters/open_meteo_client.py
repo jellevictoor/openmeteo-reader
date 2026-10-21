@@ -2,12 +2,12 @@
 Adapter - Fetches weather data from the Open-Meteo Forecast and Historical APIs
 """
 import time
-from datetime import date
+from datetime import UTC, date, datetime
 
 import httpx
 
 from openmeteo_reader.domain.ensemble_response import parse_ensemble_readings
-from openmeteo_reader.domain.models import WeatherReading
+from openmeteo_reader.domain.models import HOME_TIMEZONE, WeatherReading
 from openmeteo_reader.domain.open_meteo_response import parse_hourly_readings
 from openmeteo_reader.ports.forecast_source import ForecastSource
 from openmeteo_reader.ports.weather_source import WeatherSource
@@ -16,9 +16,10 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 HISTORICAL_URL = "https://archive-api.open-meteo.com/v1/archive"
 ENSEMBLE_URL = "https://ensemble-api.open-meteo.com/v1/ensemble"
 
-# DWD's ICON: the standard reference model for European weather, a good fit for a
-# Belgian home station. 40 members, ~7.5 day horizon.
-ENSEMBLE_MODEL = "icon_seamless"
+# DWD's ICON (40 members, ~7.5 days) and ECMWF's IFS (51 members, 15 days), pooled
+# into one 91-member ensemble. A single model family can be confidently wrong about
+# when a front passes; two independent ones put the median where they agree.
+ENSEMBLE_MODELS = ["icon_seamless", "ecmwf_ifs025"]
 # The variables people actually act on day-to-day ("how warm", "will it rain", "how
 # windy") - not the full curated actuals set, which would be far more members/writes
 # for spread bands most people won't look at.
@@ -144,12 +145,14 @@ class OpenMeteoClient(WeatherSource, ForecastSource):
         location: str = "home",
         http_client: httpx.Client | None = None,
         sleep=time.sleep,
+        now=lambda: datetime.now(UTC),
     ):
         self._latitude = latitude
         self._longitude = longitude
         self._location = location
         self._http = http_client or httpx.Client(timeout=30.0)
         self._sleep = sleep
+        self._now = now
 
     def _get(self, url: str, params: dict) -> httpx.Response:
         response = self._http.get(url, params=params)
@@ -178,18 +181,31 @@ class OpenMeteoClient(WeatherSource, ForecastSource):
         return parse_hourly_readings(response.json(), location=self._location)
 
     def fetch_forecast(self, days: int) -> list[WeatherReading]:
+        # Timestamps stay UTC; days are cut at local midnight. Local midnight is
+        # before UTC midnight, so yesterday is fetched too: today's running rain
+        # total then starts at 00:00 local, and everything before it is dropped.
         response = self._get(
             ENSEMBLE_URL,
             params={
                 "latitude": self._latitude,
                 "longitude": self._longitude,
                 "hourly": ",".join(ENSEMBLE_VARIABLES),
-                "models": ENSEMBLE_MODEL,
+                "models": ",".join(ENSEMBLE_MODELS),
                 "forecast_days": days,
+                "past_days": 1,
                 "timezone": "UTC",
             },
         )
-        return parse_ensemble_readings(response.json(), location=self._location)
+        readings = parse_ensemble_readings(
+            response.json(),
+            location=self._location,
+            variables=ENSEMBLE_VARIABLES,
+            day_zone=HOME_TIMEZONE,
+        )
+        local_midnight = self._now().astimezone(HOME_TIMEZONE).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        return [r for r in readings if r.timestamp >= local_midnight]
 
     def fetch_historical(self, start: date, end: date) -> list[WeatherReading]:
         response = self._get(

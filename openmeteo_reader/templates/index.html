@@ -232,7 +232,11 @@
       return "🌡️";
     }
 
-    function dayKey(isoTime) { return isoTime.slice(0, 10); }
+    // A day is Home's local calendar day, matching how the importer resets each
+    // day's running rain total at local midnight. en-CA formats as YYYY-MM-DD.
+    function dayKey(isoTime) {
+      return new Date(isoTime).toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+    }
 
     function formatDayLabel(key) {
       const d = new Date(key + "T00:00:00Z");
