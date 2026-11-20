@@ -125,14 +125,14 @@ HISTORICAL_HOURLY_VARIABLES = [
 # rather than let one transient response kill an entire multi-year backfill.
 RETRY_BACKOFF_SECONDS = [5, 15, 45]
 
-# The home's actual PV array, from Home Assistant's forecast_solar integration
-# (.storage/core.config_entries, subentry "39° / 154° / 5200W"). HA stores azimuth
-# in compass convention (0=north, 90=east, 180=south); Open-Meteo's global_tilted_
-# irradiance uses the solar-industry convention (0=south, -90=east, 90=west), so
-# the stored 154 becomes 154-180=-26 here. Without this, global_tilted_irradiance
-# is computed for Open-Meteo's default orientation, not this roof.
+# The home's actual PV array: SW roof slope, compass bearing 200 (house plans,
+# aerial photo, production peak after solar noon), tilt 39. Home Assistant's
+# forecast_solar stores azimuth in compass convention (0=north, 180=south);
+# Open-Meteo's global_tilted_irradiance uses the solar-industry convention
+# (0=south, -90=east, 90=west), so compass 200 becomes 200-180=20 here.
+# See docs/adr/0004-pv-panel-azimuth-convention.md.
 PANEL_TILT_DEGREES = 39
-PANEL_AZIMUTH_DEGREES = -26
+PANEL_AZIMUTH_DEGREES = 20
 
 
 class OpenMeteoClient(WeatherSource, ForecastSource):
